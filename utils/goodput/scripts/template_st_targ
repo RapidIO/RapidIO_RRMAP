@@ -1,0 +1,68 @@
+scrp MPORT_DIR
+kill all
+wait 0 D
+wait 1 D
+wait 2 D
+wait 3 D
+wait 4 D
+wait 5 D
+wait 6 D
+wait 7 D
+wait 8 D
+wait 9 D
+wait 10 D
+wait 11 D
+
+t 0 -1 0
+t 1 -1 0
+t 2 -1 0
+t 3 -1 0
+t 4 -1 0
+t 5 -1 0
+t 6 -1 0
+t 7 -1 0
+t 8 -1 0
+t 9 -1 0
+t 10 -1 0
+t 11 -1 0
+
+wait 0 H
+wait 1 H
+wait 2 H
+wait 3 H
+wait 4 H
+wait 5 H
+wait 6 H
+wait 7 H
+wait 8 H
+wait 9 H
+wait 10 H
+wait 11 H
+
+msgR 0 skt_prefix0
+msgR 1 skt_prefix1
+msgR 2 skt_prefix2
+msgR 3 skt_prefix3
+msgR 4 skt_prefix4
+msgR 5 skt_prefix5
+msgR 6 skt_prefix6
+msgR 7 skt_prefix7
+
+mR   8 skt_prefix9 0x1000
+
+wait 0 R
+wait 1 R
+wait 2 R
+wait 3 R
+wait 4 R
+wait 5 R
+wait 6 R
+wait 7 R
+wait 8 R
+
+IBA 10 0x400000 iba_addr
+sleep 1
+wait 10 H
+
+st i
+mpd

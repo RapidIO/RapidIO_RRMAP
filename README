@@ -1,0 +1,114 @@
+/*
+****************************************************************************
+Copyright (c) 2015, Integrated Device Technology Inc.
+Copyright (c) 2015, RapidIO Trade Association
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*************************************************************************
+*/
+
+--->>> RAPIDIO REMOTE MEMORY ACCESS PLATFORM REVISION 5.0 <<<---
+
+For release notes, see the end of this file.
+
+****** GENERAL NOTES ABOUT THE SCRIPTS *******
+
+- If invoked without parameters, all scripts will respond with the
+  list of parameters required by the script.
+
+- A node name of "none" for nodes 2, 3, and 4 is ignored by the scripts.
+
+******* PREPARING TO INSTALL RRMAP *******
+
+Note that the scripts below may have already been used to install the 
+Linux kernel package.  If so, skip this step.
+
+The installation script requires SSH password-less root access to the four nodes
+of the cluster.  The scripts below can be used to simplify this setup.
+
+- admin_init_root.sh configures passwordless access for a specified user
+        on the four nodes entered.
+- admin_init_dir.sh creates the directories used by the driver install as well
+        as the RRMAP software
+- admin_user_add.sh creates the named user account with specified password
+        and Linux group on the four nodes specified.
+- admin_user_del.sh removes the named user account on the four nodes specified.
+
+To prepare the system for the software install, execute the following sequence.
+Note that the script parameters have been left out for brevity.
+
+1) sudo admin_init_root_key.sh to get SSH root access to all four nodes.
+2) sudo admin_user_add.sh to create as many users as required
+3) admin_init_root_key.sh for each user to get SSH root access to all four nodes
+4) admin_init_dir.sh to create the directories on all four nodes
+
+******* PACKAGES REQUIRED FOR RRMAP SOFTWARE *******
+
+The following packages must be installed on all nodes for the RRMAP software
+to execute correctly:
+ - screen
+ - doxygen
+ - sysfsutils
+ - gcc-c++
+
+******* INSTALLING THE RRMAP SOFTWARE *******
+
+To install the RRMAP, run install.sh with the required parameters
+for up to a 4 node cluster.
+
+******* RRMAP SOFTWARE OVERVIEW *******
+
+The RRMAP software stack consists of the following functionality:
+- Fabric Management
+- Utilities
+	- File transfer kernel interfaces
+	- Goodput (performance analysis)
+
+Create the detailed documentation by executing "doxygen doxyconfig"
+in this directory.
+
+Open documentation using "firefox html/index.html"
+
+******* RELEASE NOTES *******
+
+New functionality in RRMAP 6.0 compared to 5.0:
+- Fabric Management functionality now has the following switch support options:
+  - AUTO - Automatically configure all reachable nodes.  The master/enumerating
+           nodes requires a /etc/rapidio/fmd.conf configuration file, all
+           others just use defaults.
+  - RXS  - Support for IDTs RXS2448 and RXS1632 is now available.
+	   Rack mountable switch boxes are available from StarBridge.
+- The content of the open source version of RRMAP has been restricted to 
+  file transfer.  For the complete RRMAP software package, join RapidIO.org
+  or contact a RapidIO.org participating company to receive a copy.
+
+New functionality in RRMAP 5.0 compared to 4.2:
+- Support for reserved memory areas in RDMA, DMA TUN, and File Transfer.
+  Large amounts of contiguous physical memory allow fast operation of RDMA
+  and File Transfer, and are required for DMA TUN.
+- Optional inclusion of the Centaurus Software RIOSocket kernel module,
+  which supports IP Frame Tunnelling through the kernel.  

@@ -1,0 +1,63 @@
+echo Logical
+r 100c
+
+echo Port 0
+r 158
+r 1040
+r f40008
+
+echo Port 1
+r 178
+r 1060
+r f40108
+
+echo Port 2
+r 198
+r 1080
+r f40208
+
+echo Port 3
+r 1B8
+r 10A0
+r f40308
+
+echo Port 4
+r 1D8
+r 10C0
+r f40408
+
+echo Port 5
+r 1F8
+r 10E0
+r f40508
+
+echo Port 6
+r 218
+r 1100
+r f40608
+
+echo Port 7
+r 238
+r 1120
+r f40708
+
+echo Port 8
+r 258
+r 1140
+r f40808
+
+echo Port 9
+r 278
+r 1160
+r f40908
+
+echo Port A 10
+r 298
+r 1180
+r f40A08
+
+echo Port B 11
+r 2B8
+r 11A0
+r f40B08
+

@@ -1,0 +1,67 @@
+log m_rx_log.txt
+
+kill all
+wait 0 0
+wait 1 0
+wait 2 0
+wait 3 0
+wait 4 0
+wait 5 0
+wait 6 0
+wait 7 0
+
+t 0 -1 0
+t 1 -1 0
+t 2 -1 0
+t 3 -1 0
+t 4 -1 0 
+t 5 -1 0 
+t 6 -1 0 
+t 7 -1 0 
+
+wait 0 2
+wait 1 2
+wait 2 2
+wait 3 2
+wait 4 2
+wait 5 2
+wait 6 2
+wait 7 2
+
+msgR 0 skt_prefix0
+msgR 1 skt_prefix1
+msgR 2 skt_prefix2
+msgR 3 skt_prefix3
+msgR 4 skt_prefix4
+msgR 5 skt_prefix5
+msgR 6 skt_prefix6
+msgR 7 skt_prefix7
+
+wait 0 1
+wait 1 1
+wait 2 1
+wait 3 1
+wait 4 1
+wait 5 1
+wait 6 1
+wait 7 1
+
+echo RUNNING MESSAGE RECEIVE ON SOCKETS skt_prefix0 UP TO skt_prefix7
+
+g
+g c
+g
+sleep wait_time
+
+wait 0 1
+wait 1 1
+wait 2 1
+wait 3 1
+wait 4 1
+wait 5 1
+wait 6 1
+wait 7 1
+
+st
+
+close 

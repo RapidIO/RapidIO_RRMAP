@@ -1,0 +1,9 @@
+RapidIO fabric management - (c) 2014 Prodrive Technologies
+SPDX-License-Identifier: BSD-3-Clause
+==========================================================
+
+The purpose of this code set is to provide architecture and operating system
+independent interfaces towards RapidIO fabric management stack internals. This
+directory contains different abstraction APIs for e.g. Linux, VxWorks and/or
+Windows.
+

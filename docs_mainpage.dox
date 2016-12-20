@@ -1,0 +1,247 @@
+/** \mainpage RapidIO Remote Memory Access Platform (RRMAP)  Overview
+ *
+ * The RapidIO Remote Memory Access Platform uses the Linux kernel RapidIO
+ * character mode driver interfaces to provide performance 
+ * optimized, portable high performance communication capabilities for
+ * a heterogenous computing environment.  The interfaces provided are all 
+ * found in the rapidio_sw/include directory.  They are:
+ * - RapidIO master port (MPORT) management, DMA, and channelized messaging
+ *   character mode driver interfaces
+ * - Fabric management to support system enumeration based on a
+ *   configuration file, and to manage software applications using the fabric
+ *
+ * Two utilities are also provided:
+ * - Goodput - performance measurement of the RapidIO fabric 
+ * - File Transfer - performs file transfer over a RapidIO network using
+ *   messaging to coordinate DMA transfers between multiple clients and
+ *   servers.
+ *
+ * Public interfaces are found in rapidio_sw/include:
+ * - libfmdd.h : Interfaces for the fabric management daemon.  Use these to
+ *               confirm what nodes are available in the system, and what
+ *               facilities (Remote Memory Access, RMA Sockets) are available
+ *               on each node.
+ *
+ * Precompiled libraries associated with the interfaces are found in:
+ * - Static linking: /opts/rapidio/rapidio_sw/include/libs_a 
+ * Applications may use
+ * these interfaces to incorporate the RRMAP capabilities listed above.
+ *
+ * All public interfaces are documented.
+ * Refer to the "Files" tab for more details.
+ *
+ * \section install_sec Installation
+ *
+ * Automatic installation has been tested on systems with up to four nodes.
+ * Two switch types are supported:
+ * - StarBridge RapidIO 8 port switch applicance
+ * - Prodrive Technologies 38 port Top-of-Rack switch
+ * Note that the endpoints MUST be connected to the switch 
+ * ports described below.
+ *
+ * Installation depends upon the following:
+ *
+ * - ssh been configured to allow root access to all four nodes      
+ * - The 'screen' utility has been installed on all four nodes
+ * - The 'doxygen' utility has been installed on all four nodes
+ * - The 'sysfsutils' package has been installed on all four nodes
+ * - The 'gcc-c++' package has been installed on all four nodes.
+ *   Requires version 4.7 or later.
+ *
+ * Installation is a two step process:
+ * -# Unpack the RapidIO software on any of the four nodes.
+ *   - This should create a rapidio_sw directory
+ *
+ * -# Execute the rapidio_sw/install.sh script as follows:
+ *   - install.sh (NODE1) (NODE2) (NODE3) (NODE4) (memsz) (sw_type) (group)
+ *     - (NODE1) Name of master, enumerating node, connected to Switch Port 1
+ *     - (NODE2) Name of slave node connected to Switch Port 2
+ *     - (NODE3) Name of slave node connected to Switch Port 3
+ *     - (NODE4) Name of slave node connected to Switch Port 4
+ *     - If the value of any of (NODE2) (NODE3) (NODE4) is "none", 
+ *       the node is ignored.
+ *     - (memsz) RapidIO system memory address size
+ *       - Valid values are mem34, mem50, mem66
+ *         - mem34 : all (NODEn) have 8 GB of addressable memory or less
+ *         - mem50 : all (NODEn) have 2 TB of addressable memory or less
+ *         - mem66 : all (NODEn) have 2 PB of addressable memory or less
+ *     - (sw_type)
+ *       - PD_tor: Prodrive Top of Rack switch.  The devices must be
+ *                 connected as follows.  All locations are described from
+ *                 the perspective of facing the front of the switch:
+ *                 - NODE1: Far lower left QSFP connector
+ *                 - NODE2: The QSFP immediately to the right of node1
+ *                 - NODE3: Far upper left QSFP connector
+ *                 - NODE4: The QSFP immediately to the right of node3
+ *       - SB_re: StarBridge Inc RapidExpress Switch.  The devices must
+ *                 be connected as follows.  All locations are described
+ *                 from the perspective of facing the front of the switch:
+ *                 - NODE1: QSFP labelled Port 1
+ *                 - NODE2: QSFP labelled Port 2
+ *                 - NODE3: QSFP labelled Port 3
+ *                 - NODE4: QSFP labelled Port 4
+ *     - (group) Unix file ownership group which should have access to
+ *       the RapidIO software
+ * 
+ * The installation script creates the following configuration files in
+ * /etc/rapidio:
+ *
+ * - fmd.conf - On the master node, fmd.conf contains configuration information 
+ *              for the entire system, includeing the switch and slave nodes.
+ *              On the slave nodes, fmd.conf contains configuration information
+ *              that allows the slave Fabric Management Daemon to contact the
+ *              master fabric management daemon.  For 
+ *              more information, refer to \ref stack_fmd.
+ * - nodelist.sh - List of nodes in the system.  Used by many scripts to 
+ *              determine what devices are available for demonstrations,
+ *              including the start and stop scripts described in
+ *              \ref execution_sec.
+ *
+ * \section execution_sec Starting and Stopping RRMAP
+ *
+ * Scripts to start and stop RRMAP components are created by the install.sh
+ * script in the /opt/rapidio/rapidio_sw directory on each node.
+
+ * Use the check_all.sh script to determine the component status 
+ * of each installed node.
+ *
+ * - RRMAP Stack: The RRMAP stack includes
+ *   - \ref stack_fmd Fabric Management, 
+ *
+ * \subsection kernel_config Kernel Only
+ *
+ * To start the "kernel only" configuration,
+ * execute the rio_start.sh script
+ *
+ * To halt the "kernel only" configuration, use one of the following
+ * scripts:
+ * - ./stop_rio.sh - removes access to DMA and messaging
+ * - ./all_down.sh - powers down all nodes 
+ *
+ * Refer to \ref goodput_docs goodput for information on 
+ * starting the goodput utility.
+ *
+ * \subsection rrmap_exec RRMAP Stack
+ *
+ * To start the RRMAP stack, execute the following script:
+ * - ./all_start.sh 
+ *
+ * All_start.sh starts RRMAP fabric management.
+ *
+ * To halt the RRMAP stack configuration, use one of the following
+ * scripts:
+ * - ./stop_all.sh - terminates Fabric Management, RMA, RMA Sockets, 
+ *                   Tsi721 User Mode Driver, and DmaTun.
+ * - ./all_down.sh - powers down all nodes 
+ *
+ * \section centaurus_execution_sec Starting and Stopping Centaurus RIOSocket
+ *
+ * Centaurus Software's "RIOSocket" kernel module may optionally be installed.
+ * Scripts have been provided to start and stop RIOSocket independent of the
+ * rest of the RRMAP stack.  RIOSocket can be executed in Kernel Only and 
+ * with the rest of the RRMAP stack.
+ *
+ * To start RIOSocket, execute "centaurus_start.sh".
+ * To halt  RIOSocket, execute "stop_centaurus.sh".
+ *
+ * \page stack_fmd RRMAP Fabric Management Overview
+ *
+ * \section fabric_management Fabric Management 
+ *
+ * Fabric management is implemented in the Fabric Management Daemon (FMD)
+ * RRMAP stack process.  One FMD must be running on each node in the system.
+ * The master FMD, running on the master node,
+ * is responsible for enumerating and managing the 
+ * RapidIO network.  The slave FMDs, running on all other nodes, inform
+ *  the master FMD when applications register and exit.
+ *
+ * The FMD allows applications to be notified when 
+ * an application enters or leaves the system.  A slave FMD
+ * learns that an application has left the system when the AF_UNIX
+ * connection to the application fails.  The slave FMD
+ * informs the master FMD of the change.  The
+ * master Fabric Management Daemon then informs all slave Fabric Management
+ * Daemons of the change.  The slave Fabric Management Daemons in turn 
+ * notify the local applications of the change.
+ *
+ * A similar sequence of communication occurs when an application enters the
+ * system and incorporates the libfmdd library.
+ *
+ * Refer to the include/libfmdd.h file reference for interface details.
+ *
+ * \subsection fabric_management_details Fabric Management Daemon Details
+ *
+ * The master Fabric Management Daemon initializes switch routing tables 
+ * and other switch and endpoint configuration details on startup.  The 
+ * slave Fabric Management Daemons use Channelized Messaging (rio_cm kernel
+ * module) to connect to the Master Fabric Management Daemons.  Once this
+ * connection is successful, the slave Fabric Management Daemons are informed 
+ * of changes in the system. 
+ *
+ * The Slave Fabric Management Daemons will not allow applications to connect
+ * to it until it has connected to the Master Fabric Management Daemon.
+ * 
+ * \page stack_fxfr File Transfer Utility
+ *
+ * The file transfer demonstration is found in the
+ * rapidio_sw/utils/file_transfer directory.  It consists of a server
+ * process which receives transfered files, and a client command which
+ * sends a file to a specified server.
+ * 
+ * The file transfer server is launched on all nodes of the cluster using the
+ * file_transfer/fxfr_test.sh script.  The script runs the server
+ * using the "screen" utility, which allows users access to the
+ * server command prompt.  To connect to the server command prompt, execute
+ * the following command on the node where the server is running: 
+ * screen -r fxfr_server
+ * 
+ * The file transfer server process manages up to 8 windows of a
+ * configurable size. 
+ * Each window can support a single file transfer operation.  Multiple windows
+ * can be used at the same time to transfer multiple files in parallel.
+ *
+ * To transfer a file, type the following command  in the
+ * rapidio_sw/utils/file_transfer directory.
+ * Note that depending on your system configuration and privileges,
+ * this command may need to be run as root:
+ *
+ * ./rftp (src_file) (dest_file) (destID) (cm_skt) (mport) (dbg) (kbuf) 
+ * - src_file – Name of the file to be transferred, along with the path to the
+ *              file.
+ * - dest_file – Name of the transferred file on the target machine, along 
+ *               with the path to the file.
+ * - destID – RapidIO destination ID of the target server.
+ *            Execute the “mpdevs” command from the server command
+ *            prompt to confirm the servers destination ID.
+ * 
+ *  Note: all parameters below are optional
+ * 
+ * - cm_skt – RapidIO Channelized Messaging (CM) socket number to connect to.
+ *            The eefault value is 5555, and is used by the fxfr_start.sh 
+ *            script. . Execute the “status” command from the server command
+ *            prompt to display the CM socket number used by that server.
+ * - mport – The index of the mport number on the node executing the ./rftp 
+ *           command to be used to send the request.
+ *           The default mport number is 0. Enter a non-existant (i.e.  0xUA) 
+ *           mport number to display the (mport) values available on the 
+ *           local node, 
+ *           and the (destID) values where servers may be running.
+ * - dbg – A non-zero dbg value displays error/debug/trace messages
+ *            for the file transfer.   This can be useful when learning the
+ *            file transfer implementation.
+ * - kbuf – The rftp command may use user allocated memory, or kernel buffer
+ *          memory, to transfer the files.  Kernel buffers are physically 
+ *          contiguous memory, which support transfers using a single DMA 
+ *          transaction leading to higher performance;
+ *          User allocated memory is not physically contiguous, and so can
+ *          result in many smaller 4K DMA transactions and lower performance.
+ *           Rftp uses kernel memory by default..  
+ *
+ * Entering ./rftp with no parameters displays a message describing the
+ * above syntax.
+ *
+ * The rftp client performs the file transfer and reports
+ * elapsed time for the transfer, along with average throughput.  Note that
+ * throughput is usually constrained by file system performance.
+ *
+ */

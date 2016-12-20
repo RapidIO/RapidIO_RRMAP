@@ -1,0 +1,27 @@
+libriocp_pe - (c) 2014 Prodrive Technologies
+SPDX-License-Identifier: BSD-3-Clause
+============================================
+
+The purpose of this library is to provide architecture and operating system
+independent interfaces towards managing a network of RapidIO switches and
+endpoints. Local RapidIO master ports and remote RapidIO devices are
+abstracted and represented by opaque handles. The user can access registers
+of both local and remote devices by supplying these handles.
+
+libriocp_pe maintains a graph of the network in its internal administration,
+providing at most one unique handle per unique device. Accessing remote
+devices through these handles is implemented via maintenance transactions
+towards endpoint ANY_ID; the library changes routes towards this destination
+ID on the fly, based on its internal administration.
+
+Linux
+=====
+
+Using this library within the Linux operating system requires dynamic linkage
+against the generic RapidIO mport driver (i.e. CONFIG_RAPIDIO_MPORT_CDEV=y).
+The Makefile allows (cross-)compilation of the source code using a pre-built
+tool chain and kernel headers. Compile using `make -f Makefile.example'. Use
+the following environment variables to provide the tool chain and kernel
+headers:
+ * CROSS_COMPILE=/path/to/tool/chain
+ * INCDIR=/path/to/kernel/headers

@@ -1,0 +1,36 @@
+# Copyright (c) 2014, Prodrive Technologies
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+NAME:=riocp_pe
+TARGETS:=lib$(NAME).a
+HEADERS:=inc/lib$(NAME).h
+
+CROSS_COMPILE?=/usr/bin/
+INCDIR?=/usr/include/
+
+CC:=$(CROSS_COMPILE)gcc
+AR:=$(CROSS_COMPILE)ar
+
+CFLAGS+=$(addprefix -W,all extra error) -fPIC
+CFLAGS+=-DNDEBUG
+CFLAGS+=$(addprefix -I,inc $(INCDIR))
+LDFLAGS+=-L. -l$(NAME)
+
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c)) $(patsubst src/switches/%.c,src/switches/%.o,$(wildcard src/switches/*.c))
+
+all: $(TARGETS)
+
+%.a: $(OBJECTS)
+	$(AR) rcs $@ $^
+
+src/%.o: src/%.c $(HEADERS)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+src/switches/%.o: src/switches/%.c $(HEADERS)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+clean:
+	rm -f $(TARGETS) $(OBJECTS)
+
+.PHONY: all clean

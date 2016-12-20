@@ -1,0 +1,12 @@
+RapidIO fabric management - (c) 2014 Prodrive Technologies
+SPDX-License-Identifier: BSD-3-Clause
+==========================================================
+
+The purpose of this set of libraries and applications is to provide
+architecture and operating system independent interfaces towards managing a
+RapiIO fabric, constructed of switches and endpoints. This set of software
+currently supports Linux as target platform but should be straightforward to
+port to other operating systems.
+
+Refer to <component>/README for further instructions.
+
