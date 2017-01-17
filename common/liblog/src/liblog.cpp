@@ -57,6 +57,10 @@ using std::string;
 extern "C" {
 #endif
 
+#ifndef RDMA_LL
+extern unsigned RDMA_LL;
+#endif
+
 unsigned g_level 	= RDMA_LL; /* Default log level from build */
 unsigned g_disp_level 	= RDMA_LL_CRIT; /* Default log level from build */
 

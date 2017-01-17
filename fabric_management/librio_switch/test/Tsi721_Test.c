@@ -122,7 +122,7 @@ static void tsi721_test_setup(void)
         for (pnum = 0; pnum < MAX_DAR_PORTS; pnum++) { 
             pp_ctrs[pnum].pnum = pnum;
             pp_ctrs[pnum].ctrs_cnt = TSI721_NUM_PERF_CTRS;
-            for (idx = 0; idx < IDT_MAX_SC; idx++) {
+            for (idx = 0; idx < RIO_MAX_SC; idx++) {
                 pp_ctrs[pnum].ctrs[idx] = init;
            }
        }
@@ -236,8 +236,6 @@ static int tsi721_teardown(void **state)
 
 void tsi721_assumptions_test(void **state)
 {
-	const char *name;
-
 	// Verify constants
 	assert_int_equal(1, TSI721_MAX_PORTS);
 	assert_int_equal(4, TSI721_MAX_LANES);
@@ -251,39 +249,8 @@ void tsi721_assumptions_test(void **state)
 	assert_int_equal(0x0000FFFF, TSI721_MWR_CNT_MW_OK_CNT);
 
 	// Verify ranges are sane
-	assert_in_range(TSI721_NUM_PERF_CTRS, 0, IDT_MAX_SC);
+	assert_in_range(TSI721_NUM_PERF_CTRS, 0, RIO_MAX_SC);
 
-	// Verify that names array is correctly defined
-	
-	assert_string_equal("Disabled__", SC_NAME(idt_sc_disabled));
-	assert_string_equal("Enabled___", SC_NAME(idt_sc_enabled));
-	assert_string_equal("PCI_M__PKT", SC_NAME(idt_sc_pcie_msg_rx));
- 	assert_string_equal("PCI_M__PKT", SC_NAME(idt_sc_pcie_msg_tx));
- 	assert_string_equal("PCI__D_PKT", SC_NAME(idt_sc_pcie_dma_rx));
-	assert_string_equal("PCI__D_PKT", SC_NAME(idt_sc_pcie_dma_rx));
-	assert_string_equal("PCI_BG_PKT", SC_NAME(idt_sc_pcie_brg_rx));
-	assert_string_equal("PCI_BG_PKT", SC_NAME(idt_sc_pcie_brg_tx));
-	assert_string_equal("MSG____PKT", SC_NAME(idt_sc_rio_msg_tx));
-	assert_string_equal("MSG____PKT", SC_NAME(idt_sc_rio_msg_rx));
-	assert_string_equal("MSG_RTYPKT", SC_NAME(idt_sc_rio_msg_tx_rty));
-	assert_string_equal("MSG_RTYPKT", SC_NAME(idt_sc_rio_msg_rx_rty));
-	assert_string_equal("DMA____PKT", SC_NAME(idt_sc_rio_dma_tx));
-	assert_string_equal("DMA____PKT", SC_NAME(idt_sc_rio_dma_rx));
-	assert_string_equal("BRG____PKT", SC_NAME(idt_sc_rio_brg_tx));
-	assert_string_equal("BRG____PKT", SC_NAME(idt_sc_rio_brg_rx));
-	assert_string_equal("BRG_ERRPKT", SC_NAME(idt_sc_rio_brg_rx_err));
-	assert_string_equal("DB_____PKT", SC_NAME(idt_sc_rio_dbel_tx));
-	assert_string_equal("DB__OK_PKT", SC_NAME(idt_sc_rio_dbel_ok_rx));
-	assert_string_equal("MWR____PKT", SC_NAME(idt_sc_rio_mwr_tx));
-	assert_string_equal("MWR_OK_PKT", SC_NAME(idt_sc_rio_mwr_ok_rx));
-	assert_string_equal("NWR____PKT", SC_NAME(idt_sc_rio_nwr_tx));
-	assert_string_equal("NWR_OK_PKT", SC_NAME(idt_sc_rio_nwr_ok_rx));
-	assert_string_equal("Last______", SC_NAME(idt_sc_last));
-	assert_string_equal("Invalid___", SC_NAME(idt_sc_last + 1));
-	
-        assert_int_equal(RIO_SUCCESS, idt_sc_other_if_names(
-				&mock_dev_info, &name));
-	assert_string_equal("PCIExp", name);
 	(void)state; // unused
 }
 

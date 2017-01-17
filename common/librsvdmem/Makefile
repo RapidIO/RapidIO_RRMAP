@@ -45,15 +45,13 @@ LINK_FLAGS+= -rdynamic -shared -Wl,-soname,lib$(NAME).so.$(SOVER)
 LDFLAGS+=-L. -L$(COMMONLIB) $(LIBS_RPATH) -l$(NAME)
 
 
-.PHONY: all clean test
+.PHONY: all clean
 
-ifndef TEST
-all: $(TARGETS)
-else
+ifdef TEST
 all: $(TARGETS) $(TEST_TARGET)
+else
+all: $(TARGETS)
 endif
-
-test: $(TEST_TARGET) 
 
 %.a: $(OBJECTS)
 	@echo ---------- Building $@
@@ -78,4 +76,5 @@ $(TEST_TARGET): $(TEST_OBJECTS)
 	-lcli -pthread
 
 clean:
+	@echo ---------- Cleaning lib$(NAME)...
 	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(TEST_TARGET) $(OBJECTS) $(TEST_OBJECTS) inc/*~ src/*~ *~

@@ -1,7 +1,7 @@
 /*
 ****************************************************************************
-Copyright (c) 2015, Integrated Device Technology Inc.
-Copyright (c) 2015, RapidIO Trade Association
+Copyright (c) 2017, Integrated Device Technology Inc.
+Copyright (c) 2017, RapidIO Trade Association
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -31,7 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
---->>> RAPIDIO REMOTE MEMORY ACCESS PLATFORM REVISION 5.0 <<<---
+--->>> RAPIDIO REMOTE MEMORY ACCESS PLATFORM REVISION 7.0 <<<---
 
 For release notes, see the end of this file.
 
@@ -42,10 +42,12 @@ For release notes, see the end of this file.
 
 - A node name of "none" for nodes 2, 3, and 4 is ignored by the scripts.
 
-******* PREPARING TO INSTALL RRMAP *******
+******* PREPARING TO INSTALL RRMAP - SSH PERMISSION SETUP *******
 
 Note that the scripts below may have already been used to install the 
-Linux kernel package.  If so, skip this step.
+Linux kernel package.  If so, skip this step after checking that:
+- It is possible to ssh root@node to all nodes from the install server node
+- It is possible, as root, to ssh <server> without entering a password
 
 The installation script requires SSH password-less root access to the four nodes
 of the cluster.  The scripts below can be used to simplify this setup.
@@ -65,6 +67,8 @@ Note that the script parameters have been left out for brevity.
 2) sudo admin_user_add.sh to create as many users as required
 3) admin_init_root_key.sh for each user to get SSH root access to all four nodes
 4) admin_init_dir.sh to create the directories on all four nodes
+5) On every node, use admin_init_root_key.sh as root to get passwordless access
+   to the node.  For example, if SERVER is the ser
 
 ******* PACKAGES REQUIRED FOR RRMAP SOFTWARE *******
 
@@ -94,6 +98,32 @@ in this directory.
 Open documentation using "firefox html/index.html"
 
 ******* RELEASE NOTES *******
+
+New functionality in RRMAP 7.0 compared to 6.0:
+- Fabric Management Functionality
+  - Support for scread, scdisplay commands to read and dump Statistics Counter
+    information for all supported devices.
+    - The scdisplay command allows filtering of which statistics counters
+      are displayed.  For more information, enter '? scd" from a Fabric
+      Management Daemon command prompt.
+  - System configuration has been greatly simplified
+    - All slaves now learn the location of the master based on register values.
+    - Slaves no longer have a configuration file, only masters have a
+      configuration file.
+  - Bug fixes for Prodrive Top-of-Rack switch configuration template
+
+- Goodput
+  - OBDIO command enhanced to robustly set the size of the outbound window
+
+- Installation Scripts
+  - The installation scripts have been modified to use the following approach:
+    - A server node is specified which acts as the source for all installed
+      software.
+    - Each target node has a script copied to it which installs the software:
+      - Downloads software from the server
+      - makes and installs the software
+  - There is now an install_list.sh script, which accepts a file with a list of
+    nodes to install.  Type 'install_list.sh' for the format of the file.
 
 New functionality in RRMAP 6.0 compared to 5.0:
 - Fabric Management functionality now has the following switch support options:

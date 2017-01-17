@@ -35,6 +35,10 @@ include $(TOPDIR)/rules.mk
 NAME:=cfg
 TARGETS:=lib$(NAME).a
 TEST_TARGET:=$(NAME)_test
+
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
+
 HEADERS:=inc/lib$(NAME).h
 
 CROSS_COMPILE?=/usr/bin/
@@ -51,26 +55,37 @@ CFLAGS+=-I../libct/inc
 CFLAGS+=-I../libdid/inc
 LDFLAGS+=-L. -l$(NAME)
 
-OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
-TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
+.PHONY: all clean
 
+ifdef TEST
+all: $(TARGETS) $(TEST_TARGET)
+else
 all: $(TARGETS)
+endif
 
 %.a: $(OBJECTS)
+	@echo ---------- Building $@
 	$(AR) rcs $@ $^
 
 src/%.o: src/%.c $(HEADERS)
+	@echo ---------- Building $@
 	$(CC) -c $(CFLAGS) $< -o $@
 
-test: all $(TEST_TARGET) 
+test/%.o: test/%.c
+	@echo ---------- Building $@
+	$(CC) -c $(CFLAGS) $(TST_INCS) $< -o $@
 
-$(TEST_TARGET) : $(TEST_OBJECTS)
-	$(CC) $(TEST_OBJECTS) -o $(TEST_TARGET) \
-	-L. -L../libs_a -L$(COMMONLIBA) \
-	-lcfg -lct -ldid -lcli -llog -pthread
+test/%: test/%.o
+	@echo ---------- Building $@
+	$(CC) -o $@ $< $(LDFLAGS) \
+	$(TST_LIBS)
+
+$(TEST_TARGET): $(TEST_TARGETS)
 
 clean:
-	rm -f $(TARGETS) $(TEST_TARGET) $(OBJECTS) inc/*~ src/*~ *~ *.a
+	@echo ---------- Cleaning lib$(NAME)...
+	rm -f $(TARGETS) $(OBJECTS) \
+	$(TEST_TARGETS) $(TEST_OBJECTS)\
+	inc/*~ src/*~ test/*~ *~ *.a
 
-.PHONY: all clean

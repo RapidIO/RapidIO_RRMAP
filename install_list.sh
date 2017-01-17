@@ -12,17 +12,36 @@ TMPL_FILE="config.tmpl"
 #
 PRINTHELP=0
 
-if [ "$#" -lt 8 ]; then
-    echo $'\ninstall.sh requires 8 parameters.\n'
+if [ "$#" -lt 5 ]; then
+    echo $'\ninstall_list.sh requires 5 parameters.\n'
     PRINTHELP=1
 else
     SERVER=$1
-    MASTER=$2
-    ALLNODES=( $2 $3 $4 $5 )
-    MEMSZ=$6
-    SW_TYPE=$7
-    GRP=$8
-    REL=$9
+
+    ALLNODES=();
+    # format of input file: <master|slave> <hostname> <rioname> <nodenumber>
+    while read -r line || [[ -n "$line" ]]; do
+        arr=($line)
+        host="${arr[1]}"
+        if [ "${arr[0]}" = 'master' ]; then
+            if [ -n "$MASTER" ]; then
+                echo "Multiple master entries ($line) in $2, exiting ..."
+                exit
+            fi
+            MASTER=$host
+        fi
+        ALLNODES+=("$host")
+    done < "$2"
+
+    if [ -z "$MASTER" ]; then
+        echo "No master entry in $2, exiting ..."
+        exit
+    fi
+
+    MEMSZ=$3
+    SW_TYPE=$4
+    GRP=$5
+    REL=$6
 
     if [ $MEMSZ != 'mem34' -a $MEMSZ != 'mem50' -a $MEMSZ != 'mem66' ] ; then
         echo $'\nmemsz parameter must be mem34, mem50, or mem66.\n'
@@ -36,13 +55,19 @@ else
 fi
 
 if [ $PRINTHELP = 1 ] ; then
-    echo "install.sh <SERVER> <NODE1> <NODE2> <NODE3> <NODE4> <memsz> <sw> <group> <rel>"
+    echo "install_list.sh <SERVER> <nData> <memsz> <sw> <group> <rel>"
     echo "<SERVER> Name of the node providing the files required by installation"
-    echo "<NODE1>  Name of master, enumerating node"
-    echo "<NODE2>  Name of slave node connected to Switch Port 2"
-    echo "<NODE3>  Name of slave node connected to Switch Port 3"
-    echo "<NODE4>  Name of slave node connected to Switch Port 4"
-    echo "If any of <NODE2> <NODE3> <NODE4> is \"none\", the node is ignored."
+    echo "<nData>  The file describing the target nodes of the install"
+    echo "         The file has the format:"
+    echo "         <master|slave> <IP_Name> <RIO_name> <node>"
+    echo "         Where:"
+    echo "         <IP_name> : IP address or DNS name of the node"
+    echo "         <RIO_name>: Fabric management node name."
+    echo "         <node>    : String to replace in template file,"
+    echo "                     of the form node#."
+    echo "         EXAMPLE: master 10.64.15.199 gry37 node1"
+    echo "         NOTE: Example nodeData.sh files are create by install.sh"
+    echo "         NOTE: master must always be node1"
     echo "<memsz>  RapidIO memory size, one of mem34, mem50, mem66"
     echo "         If any node has more than 8 GB of memory, MUST use mem50"
     echo "<sw>     Type of switch the four nodes are connected to."
@@ -90,20 +115,9 @@ echo "Creating install files for $SERVER..."
 ROOT="/tmp/$$"
 rm -rf $ROOT;mkdir -p $ROOT
 
-# Create nodeData.txt
+# Copy nodeData.txt
 #
-let c=0;
-for host in "${ALLNODES[@]}"; do
-    let c=c+1;
-    [ "$host" = 'none' ] && continue
-    LINE="$host $host node$c"
-    if [ $c -eq 1 ] ; then
-        echo "master $LINE" >> $ROOT/$NODEDATA_FILE
-        MASTER=$host
-    else
-        echo "slave $LINE" >> $ROOT/$NODEDATA_FILE
-    fi
-done
+cp $2 $ROOT/$NODEDATA_FILE
 
 # Create the source.tar
 #

@@ -48,6 +48,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
+extern struct unit_test_driver drvr;
+
 int check_idx(struct cli_env *env, int idx, int want_halted)
 {
 	int rc = 1;
@@ -241,7 +243,7 @@ ATTR_NONE
 int WaitCmd(struct cli_env *env, int argc, char **argv)
 {
 	int idx;
-	worker_stat state;
+	enum worker_stat state;
 
 	if (0)
 		argv[0][0] = argc;
@@ -260,7 +262,7 @@ int WaitCmd(struct cli_env *env, int argc, char **argv)
 	case 'h':
 	case 'H': state = worker_halted;
 		break;
-	default: state = (worker_stat)-1;
+	default: state = (enum worker_stat)-1;
 		break;
 	};
 

@@ -30,11 +30,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
+
+#include <stddef.h>
+#include <string.h>
 #include <DAR_DB_Private.h>
 #include <IDT_DSF_DB_Private.h>
 #include <IDT_Error_Management_API.h>
 #include <IDT_CPS_Common_Test.h>
-#include <string.h>
 #include <CPS1848_registers.h>
 #include <CPS1616_registers.h>
 
@@ -1927,7 +1929,7 @@ uint32_t IDT_CPS_em_get_int_stat  ( DAR_DEV_INFO_t             *dev_info,
 
       // Lane status is the "or" of status of each lane.
       first_lane = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].first_lane; 
-      last_lane  = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].lane_count + first_lane;; 
+      last_lane  = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].lane_count + first_lane; 
       l_err_det = 0;
 
       for (lnum = first_lane; lnum < last_lane; lnum++) {
@@ -2229,7 +2231,7 @@ uint32_t IDT_CPS_em_get_pw_stat  ( DAR_DEV_INFO_t            *dev_info,
 
       // Lane status is the "or" of status of each lane.
       first_lane = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].first_lane; 
-      last_lane  = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].lane_count + first_lane;; 
+      last_lane  = pi.cpr[pnum].cfg[pi.quad_cfg_val[pi.cpr[pnum].quadrant]].lane_count + first_lane; 
       l_err_det  = 0;
 
       for (lnum = first_lane; lnum < last_lane; lnum++) {
@@ -2875,6 +2877,9 @@ uint32_t IDT_CPS_em_create_events ( DAR_DEV_INFO_t              *dev_info,
               break;
 
           case idt_em_f_port_err  :  
+		// Note: Static code analysis indicates that pnum can be
+		// RIO_ALL_PORTS in this clause.  This is impossible, as to
+		// get to this clause !glob_event && !all_ports must be true.
 	      { uint32_t temp;
 		// Check that port_err detection is enabled.
                 rc = DARRegRead( dev_info, CPS1848_PORT_X_IMPL_SPEC_ERR_RPT_EN(pnum), &temp );

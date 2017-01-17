@@ -33,6 +33,43 @@ ifeq (,$(TOPDIR))
 $(error ************  ERROR: Please define TOPDIR in your Makefile ************)
 endif
 
+ifdef TEST
+MAKE_CTRL_FILE=$(TOPDIR)/.makeTest
+MAKE_OLD_CTRL_FILE=$(TOPDIR)/.makeAll
+else
+MAKE_CTRL_FILE=$(TOPDIR)/.makeAll
+MAKE_OLDCTRL_FILE=$(TOPDIR)/.makeTest
+endif
+
+# If clean is not a specified target, then check what type of build was last performed.
+# A clean must be performed between a test and non test build as cmocka compiles differently
+# depending on the inclusion/exclusion of test define constants eventually leading to link errors
+ifneq (,$(filter clean,$(MAKECMDGOALS)))
+$(shell rm -rf $(TOPDIR)/.makeTest)
+$(shell rm -rf $(TOPDIR)/.makeAll)
+else
+# Look for compile control files
+ifeq ($(shell test -f $(TOPDIR)/.makeAll && echo -n yes),yes)
+LAST_BUILD_TRGT=ALL
+endif
+ifeq ($(shell test -f $(TOPDIR)/.makeTest && echo -n yes),yes)
+LAST_BUILD_TRGT=TEST
+endif
+# If built before, verify building test or not
+ifdef LAST_BUILD_TRGT
+ifdef TEST
+ifeq (ALL,$(LAST_BUILD_TRGT))
+$(error ************  ERROR: Must clean between regular and test builds ************)
+endif
+else
+ifeq (TEST,$(LAST_BUILD_TRGT))
+$(error ************  ERROR: Must clean between regular and test builds ************)
+endif
+endif
+endif
+$(shell touch $(MAKE_CTRL_FILE))
+endif
+
 CC    =$(CROSS_COMPILE)gcc
 CXX   =$(CROSS_COMPILE)g++
 AR    =$(CROSS_COMPILE)ar

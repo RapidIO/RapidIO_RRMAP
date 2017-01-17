@@ -67,6 +67,7 @@ typedef uint8_t hc_t; /* hopcount */
 /** @brief max number of RIO mports supported by platform */
 #define RIO_MAX_MPORTS 8
 
+/** @brief max number of ports and lanes supported by silicon */
 #define RIO_SW_PORT_INF_PORT_MAX ((RIO_SW_PORT_INF_T)(24))
 #define RIO_SW_PORT_INF_LANE_MAX ((RIO_SW_PORT_INF_T)(48))
 
@@ -77,6 +78,9 @@ typedef uint8_t hc_t; /* hopcount */
 #define RIO_MAX_PORT_LANES  ((rio_lane_t)(4))
 #define RIO_MAX_DEV_LANES   ((rio_lane_t)(RIO_SW_PORT_INF_LANE_MAX))
 #define RIO_MAX_MC_MASKS    RIO_RT_GRP_SIZE
+
+/** @brief max number of per-port statistics counters */
+#define RIO_MAX_SC 40
 
 /* RIO_DEV_IDENT : RIO_DEV_IDENT_VEND and RIO_DEV_IDENT_DEVI Values */
 

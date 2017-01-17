@@ -32,11 +32,15 @@
 TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
-CC=$(CXX) # XXX very UGGLY switcheroo
 
 NAME:=pe_mpdrv
 TARGETS:=lib$(NAME).a
 TEST_TARGET:=$(NAME)_test
+
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
+
+CC=$(CXX) # XXX very UGGLY switcheroo
 HEADERS:=inc/lib$(NAME).h
 
 CFLAGS=$(CXXFLAGS)
@@ -50,27 +54,32 @@ CFLAGS+=-I../libcfg/inc
 
 LDFLAGS+=-L. -l$(NAME)
 
-OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
-TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
+.PHONY: all clean
 
+ifdef TEST
+all: $(TARGETS) $(TEST_TARGETS)
+else
 all: $(TARGETS)
+endif
 
 %.a: $(OBJECTS)
+	@echo ---------- Building $@
 	$(AR) rcs $@ $^
 
 src/%.o: src/%.c $(HEADERS)
-	echo KJSHKJSH
+	@echo ---------- Building $@
 	$(CC) -c $(CFLAGS) $< -o $@
 
-test: all $(TEST_TARGET) 
-
 $(TEST_TARGET) : $(OBJECTS) $(TEST_OBJECTS)
+	@echo ---------- Building $@
 	$(CC) $(OBJECTS) $(TEST_OBJECTS) -o $(TEST_TARGET) -lcli -llog \
-	-lmport -lriocp_pe -lswitch_api -pthread \
+	-lmport -lriocp_pe -lrio_switch -pthread \
 	-L. -L$(COMMONLIBA) -L../libs_a
 
 clean:
-	rm -f $(TARGETS) $(TEST_TARGET) $(OBJECTS) inc/*~ src/*~ *~ *.a
+	@echo ---------- Cleaning lib$(NAME)...
+	rm -f $(TARGETS) $(OBJECTS) \
+	$(TEST_TARGETS) $(TEST_OBJECTS) \
+	inc/*~ src/*~ test/*~ *~
 
-.PHONY: all clean

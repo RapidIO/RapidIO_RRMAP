@@ -41,6 +41,7 @@ extern "C" {
 #define RXS2448_MAX_PORTS	24
 #define RXS2448_MAX_LANES	48
 #define RXS2448_MAX_SC    	8
+#define RXS2448_MAX_MC_MASK     0xFF
 
 #define RXS_MAX_L1_GROUP	3
 #define RXS_MAX_L2_GROUP	4

@@ -800,6 +800,22 @@ spx_ctl2_ls_check_info_t rxs_ls_check[] = {
 	{ 0x00000000              , 0x00000000           , idt_pc_ls_last ,  0 }
 };
 //TODO: Maybe it needs to add lane to port mapping for this routine.
+uint32_t idt_rxs_pc_set_config( DAR_DEV_INFO_t           *dev_info,
+                                idt_pc_set_config_in_t   *in_parms,
+                                idt_pc_set_config_out_t  *out_parms )
+{
+	if (0) {
+		*(uint32_t *)dev_info = 0;
+	}
+	out_parms->imp_rc = RIO_SUCCESS;
+	out_parms->lrto = in_parms->lrto;
+	out_parms->log_rto = 0;
+	out_parms->num_ports = in_parms->num_ports;
+        memcpy(out_parms->pc, in_parms->pc,
+			IDT_MAX_PORTS * sizeof(out_parms->pc[0]));
+	return RIO_SUCCESS;
+}
+
 uint32_t idt_rxs_pc_get_config( DAR_DEV_INFO_t           *dev_info,
                                 idt_pc_get_config_in_t   *in_parms,
                                 idt_pc_get_config_out_t  *out_parms )
@@ -1708,6 +1724,7 @@ uint32_t bind_rxs_DSF_support(void)
 
 	idt_driver.dev_type = IDT_RXSx_RIO_DEVICE_ID;
 
+	idt_driver.idt_pc_set_config = idt_rxs_pc_set_config;
 	idt_driver.idt_pc_get_config = idt_rxs_pc_get_config;
 	idt_driver.idt_pc_get_status = idt_rxs_pc_get_status;
 	idt_driver.idt_pc_dev_reset_config = idt_rxs_pc_dev_reset_config;

@@ -36,6 +36,8 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 export LOCAL_LIBRARY_DIR=libs_a
+NAME=file_transfer
+
 COMMON_LIBS_DIR?=../../common/libs_a
 
 CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
@@ -77,5 +79,6 @@ rftp: $(CLIENT_OBJS)
 all: $(LIB_DEPS) libfxfr fxfr_server rftp
 
 clean:
+	@echo ---------- Cleaning $(NAME)...
 	rm -f *.o *~ *.exe core $(LOCAL_LIBRARY_DIR)/*.a fxfr rftp fxfr_server libs_a/*
 	$(MAKE) clean -C libfxfr

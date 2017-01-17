@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define __IDT_STATISTICS_COUNTER_API_H__
 
 #include <IDT_Common.h>
+#include "rio_ecosystem.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +46,6 @@ extern "C" {
    Generic structure which contains the parameters which describe the
    configuration of a port.
 */
-#define IDT_MAX_SC 40
 
 typedef enum idt_sc_ctr_t_TAG
 {
@@ -109,8 +109,45 @@ typedef enum idt_sc_ctr_t_TAG
     idt_sc_last             // Last index for enumerated type
 } idt_sc_ctr_t;
 
-extern char *sc_names[(uint8_t)(idt_sc_last)+2];
-#define SC_NAME(x) ((x<=idt_sc_last)?sc_names[x]:sc_names[(uint8_t)(idt_sc_last)+1])
+typedef enum idt_sc_ctr_flag_t_TAG {
+	sc_f_DROP = 0,
+	sc_f_ERR  = 1,
+	sc_f_RTY  = 2,
+	sc_f_CS   = 3,
+	sc_f_PKT  = 4,
+	sc_f_DATA = 5,
+	sc_f_LAST = 6,
+} idt_sc_ctr_flag_t;
+
+#define SC_FLAG_NAMES "DROP ERR RTY CS PKT DATA "
+
+#define SC_F_DROP (1 << (uint32_t)(sc_f_DROP))
+#define SC_F_ERR  (1 << (uint32_t)(sc_f_ERR ))
+#define SC_F_RTY  (1 << (uint32_t)(sc_f_RTY ))
+#define SC_F_CS   (1 << (uint32_t)(sc_f_CS  ))
+#define SC_F_PKT  (1 << (uint32_t)(sc_f_PKT ))
+#define SC_F_DATA (1 << (uint32_t)(sc_f_DATA))
+
+typedef struct idt_sc_info_t_TAG {
+	char *name;
+	uint32_t flags;
+} sc_info_t;
+
+extern sc_info_t sc_info[(uint8_t)(idt_sc_last)+2];
+#define SC_NAME(x) ((x<=idt_sc_last)? \
+		sc_info[x].name : sc_info[(uint8_t)(idt_sc_last)+1].name)
+#define SC_FLAG(x) ((x<=idt_sc_last)? \
+		sc_info[x].flags : sc_info[(uint8_t)(idt_sc_last)+1].flags)
+
+extern char *sc_flag_names[(uint8_t)(sc_f_LAST)+2];
+#define SC_FLAG_NAME(x) ((x<=sc_f_LAST)? \
+		sc_flag_names[x]:sc_flag_names[(uint8_t)(sc_f_LAST)+1])
+
+#define SC_GEN_FLAG_NAMES "TX RX SRIO OTH "
+#define SC_F_TX   0
+#define SC_F_RX   1
+#define SC_F_SRIO 2
+#define SC_F_OTH  3
 
 extern uint32_t idt_sc_other_if_names(DAR_DEV_INFO_t *dev_h, const char **name);
 
@@ -161,7 +198,7 @@ typedef struct idt_sc_p_ctrs_val_t_TAG
     uint8_t        pnum;      // Port number for these counters
     uint8_t        ctrs_cnt;  // Number of valid entries in ctrs
                             //    Device specific.
-    idt_sc_ctr_val_t ctrs[IDT_MAX_SC];  // Counter values for the device
+    idt_sc_ctr_val_t ctrs[RIO_MAX_SC];  // Counter values for the device
 } idt_sc_p_ctrs_val_t;
 
 typedef struct idt_sc_dev_ctrs_t_TAG

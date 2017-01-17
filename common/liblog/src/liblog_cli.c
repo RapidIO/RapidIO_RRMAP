@@ -47,15 +47,15 @@ extern struct cli_cmd DispLevel;
 extern unsigned g_level;
 extern unsigned g_disp_level;
 
-char *level_strings[RDMA_LL_DBG+1] {
-	(char *)"NOLOG",
-	(char *)"NOLOG",
-	(char *)"CRIT",
-	(char *)"ERR",
-	(char *)"WARN",
-	(char *)"HIGH",
-	(char *)"INFO",
-	(char *)"DBG"
+const char *level_strings[] = {
+	"NOLOG",
+	"NOLOG",
+	"CRIT",
+	"ERR",
+	"WARN",
+	"HIGH",
+	"INFO",
+	"DBG",
 };
 
 #define LOG_STR(x) ((x>RDMA_LL_DBG)?level_strings[RDMA_LL_DBG]:level_strings[x])
@@ -66,7 +66,7 @@ int LogLevelCmd(struct cli_env *env, int argc, char **argv)
 	if (argc) {
 		if (tok_parse_log_level(argv[0], &temp, 0)) {
 			LOGMSG(env, TOK_ERR_LOG_LEVEL_MSG_FMT);
-			return 1;
+			return 0;
 		}
 		if (temp > RDMA_LL)
 			temp = RDMA_LL;
@@ -108,7 +108,7 @@ int DispLevelCmd(struct cli_env *env, int argc, char **argv)
 	if (argc) {
 		if (tok_parse_log_level(argv[0], &temp, 0)) {
 			LOGMSG(env, TOK_ERR_LOG_LEVEL_MSG_FMT);
-			return 1;
+			return 0;
 		}
 		if (temp > RDMA_LL)
 			temp = RDMA_LL;

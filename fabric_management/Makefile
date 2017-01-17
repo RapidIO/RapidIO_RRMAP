@@ -49,8 +49,9 @@ CCFLAGS= $(CXXFLAGS) -fPIC -Wall -I. \
 	-I./libriocp_pe/src \
 	-DRDMA_LL=$(level)
 
-LIB_DEPS= libdid libct libriocp_pe libcli libswitch_api libdd libcfg libpe_mpdrv
-.PHONY: $(LIB_DEPS)
+LIB_DEPS= libdid libct libriocp_pe libcli librio_switch libdd libcfg libpe_mpdrv
+
+.PHONY: all clean daemon libfmdd $(LIB_DEPS)
 
 all: daemon libfmdd
 
@@ -72,10 +73,10 @@ libriocp_pe: FORCE
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libriocp_pe/libriocp_pe.a $(LOCAL_LIBRARY_DIR)
 
-libswitch_api: FORCE
+librio_switch: FORCE
 	$(MAKE) all -C librio_switch
 	mkdir -p $(LOCAL_LIBRARY_DIR)
-	cp librio_switch/libswitch_api.a $(LOCAL_LIBRARY_DIR)
+	cp librio_switch/librio_switch.a $(LOCAL_LIBRARY_DIR)
 
 libdd: FORCE
 	$(MAKE) all -C libdd

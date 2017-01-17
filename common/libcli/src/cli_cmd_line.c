@@ -53,7 +53,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-void (*cons_cleanup)(struct cli_env *env);
+extern void (*cons_cleanup)(struct cli_env *env);
 
 void splashScreen(struct cli_env *env, char *app_name)
 {

@@ -32,56 +32,78 @@
  *
  * \section install_sec Installation
  *
- * Automatic installation has been tested on systems with up to four nodes.
- * Two switch types are supported:
- * - StarBridge RapidIO 8 port switch applicance
- * - Prodrive Technologies 38 port Top-of-Rack switch
- * Note that the endpoints MUST be connected to the switch 
- * ports described below.
+ * The following Linux packages must be installed before installing RRMAP:
  *
- * Installation depends upon the following:
+ * - screen
+ * - doxygen
+ * - sysfsutils
+ * - gcc-c++, version 4.7 or later.
+ * - python
  *
- * - ssh been configured to allow root access to all four nodes      
- * - The 'screen' utility has been installed on all four nodes
- * - The 'doxygen' utility has been installed on all four nodes
- * - The 'sysfsutils' package has been installed on all four nodes
- * - The 'gcc-c++' package has been installed on all four nodes.
- *   Requires version 4.7 or later.
- *
- * Installation is a two step process:
+ * Installation is a three step process:
  * -# Unpack the RapidIO software on any of the four nodes.
  *   - This should create a rapidio_sw directory
  *
+ * -# Set up ssh access privileges:
+ *   - From the server node (see below) to all other nodes as root
+ *   - From all other nodes to the server node as root
+ *   - Refer to the README file for a list of helper scripts for this task
+ * 
+ * Then, for a four or fewer node system:
  * -# Execute the rapidio_sw/install.sh script as follows:
- *   - install.sh (NODE1) (NODE2) (NODE3) (NODE4) (memsz) (sw_type) (group)
- *     - (NODE1) Name of master, enumerating node, connected to Switch Port 1
- *     - (NODE2) Name of slave node connected to Switch Port 2
- *     - (NODE3) Name of slave node connected to Switch Port 3
- *     - (NODE4) Name of slave node connected to Switch Port 4
- *     - If the value of any of (NODE2) (NODE3) (NODE4) is "none", 
+ *   - install.sh \<SERVER> \<NODE1\> \<NODE2\> \<NODE3\> \<NODE4\> \<memsz\> \<sw_type\> \<group\>
+ *     - \<SERVER\> Name of node which will act as the file serveer for the install
+ *     - \<NODE1\> Name of master, enumerating node, connected to Switch Port 1
+ *     - \<NODE2\> Name of slave node connected to Switch Port 2
+ *     - \<NODE3\> Name of slave node connected to Switch Port 3
+ *     - \<NODE4\> Name of slave node connected to Switch Port 4
+ *     - If the value of any of \<NODE2\> \<NODE3\> \<NODE4\> is "none", 
  *       the node is ignored.
- *     - (memsz) RapidIO system memory address size
+ *     - \<memsz\> RapidIO system memory address size
  *       - Valid values are mem34, mem50, mem66
- *         - mem34 : all (NODEn) have 8 GB of addressable memory or less
- *         - mem50 : all (NODEn) have 2 TB of addressable memory or less
- *         - mem66 : all (NODEn) have 2 PB of addressable memory or less
- *     - (sw_type)
+ *         - mem34 : all \<NODEn\> have 8 GB of addressable memory or less
+ *         - mem50 : all \<NODEn\> have 2 TB of addressable memory or less
+ *         - mem66 : all \<NODEn\> have 2 PB of addressable memory or less
+ *     - \<sw_type\>
  *       - PD_tor: Prodrive Top of Rack switch.  The devices must be
  *                 connected as follows.  All locations are described from
- *                 the perspective of facing the front of the switch:
- *                 - NODE1: Far lower left QSFP connector
- *                 - NODE2: The QSFP immediately to the right of node1
- *                 - NODE3: Far upper left QSFP connector
- *                 - NODE4: The QSFP immediately to the right of node3
+ *                 the perspective of facing the front of the switch.
+                   Note that node labels run from 1 to 32, left to right,
+ *                 with odd numbers on top and even numbers on the bottom.
+ *                 - NODE1: Top, leftmost QSFP
+ *                 - NODE2: Bottom, leftmost QSFP
+ *                 - NODE3: Top QSFP to the right of NODE1
+ *                 - NODE4: Bottom QSFP to the right of NODE1
  *       - SB_re: StarBridge Inc RapidExpress Switch.  The devices must
  *                 be connected as follows.  All locations are described
- *                 from the perspective of facing the front of the switch:
+ *                 from the perspective of facing the front of the switch.
+ *                 Note that node names are node1..8, left to right
  *                 - NODE1: QSFP labelled Port 1
  *                 - NODE2: QSFP labelled Port 2
  *                 - NODE3: QSFP labelled Port 3
  *                 - NODE4: QSFP labelled Port 4
- *     - (group) Unix file ownership group which should have access to
+ *       - RXS: StarBridge Inc Gen3 RapidExpress Switch.  The devices must
+ *                 be connected as follows.  All locations are described
+ *                 from the perspective of facing the front of the switch:
+ *                 Note that node names are node1..12, left to right
+ *                 - NODE1: QSFP labelled Port 1
+ *                 - NODE2: QSFP labelled Port 2
+ *                 - NODE3: QSFP labelled Port 3
+ *                 - NODE4: QSFP labelled Port 4
+ *       - AUTO: No node names are required, they will be assigned node names
+ *               automatically during initialization.
+ *     - \<group\> Unix file ownership group which should have access to
  *       the RapidIO software
+ *
+ * -# For a system with more than four nodes:
+ *    - Create a node data file, as described by the install_list.sh script.
+ *    - Invoke the install_list.sh script as follows:
+ *      install_list.sh \<SERVER\> \<nData\> \<memsz\> \<sw_type\> \<group\>
+ *      - \<SERVER\> : Same as for install.sh above
+ *      - \<nData\>  : Name of the node data file
+ *      - \<memsz\>  : Same as for install.sh above
+ *      - \<sw_type\>: Same as for install.sh above
+ *      - \<group\>  : Same as for install.sh above
  * 
  * The installation script creates the following configuration files in
  * /etc/rapidio:
@@ -181,6 +203,26 @@
  * The Slave Fabric Management Daemons will not allow applications to connect
  * to it until it has connected to the Master Fabric Management Daemon.
  * 
+ * \page rrmapcli Remote Login Utility
+ *
+ * The RRMAP remote login utility is rrmapcli. Rrmapcli is found in
+ * rapidio_sw/utils/rrmapcli.
+ * Rmapcli connects to the command line interpreter (CLI) of an application.
+ * The conection is made over Ethernet, using
+ * a TCP/IP socket number specific to the application. Example applications are
+ * the Fabric Management Daemon and the File 
+ * Transfer Server.  Rrmapcli allows users to query the status of
+ * these applications
+ * without running "screen", and can be useful to understand the state of the
+ * application if the application CLI is not available or has hung.
+ *
+ * Rrmapcli onnections are made using the 'connect' command.
+ * For a list of TCP socket numbers supported by the RRMAP applications,
+ * enter "? connect" at the command prompt.
+ *
+ * To quit out of a "connect" session, enter "done".  This will exit the
+ * session without killing the application.
+ *
  * \page stack_fxfr File Transfer Utility
  *
  * The file transfer demonstration is found in the
@@ -205,31 +247,31 @@
  * Note that depending on your system configuration and privileges,
  * this command may need to be run as root:
  *
- * ./rftp (src_file) (dest_file) (destID) (cm_skt) (mport) (dbg) (kbuf) 
- * - src_file – Name of the file to be transferred, along with the path to the
+ * ./rftp \<src_file\> \<dest_file\> \<destID\> \<cm_skt\> \<mport\> \<dbg\> \<kbuf\> 
+ * - \<src_file\> : Name of the file to be transferred, along with the path to the
  *              file.
- * - dest_file – Name of the transferred file on the target machine, along 
+ * - \<dest_file\> : Name of the transferred file on the target machine, along 
  *               with the path to the file.
- * - destID – RapidIO destination ID of the target server.
+ * - \<destID\> : RapidIO destination ID of the target server.
  *            Execute the “mpdevs” command from the server command
  *            prompt to confirm the servers destination ID.
  * 
  *  Note: all parameters below are optional
  * 
- * - cm_skt – RapidIO Channelized Messaging (CM) socket number to connect to.
+ * - \<cm_skt\> : RapidIO Channelized Messaging (CM) socket number to connect to.
  *            The eefault value is 5555, and is used by the fxfr_start.sh 
  *            script. . Execute the “status” command from the server command
  *            prompt to display the CM socket number used by that server.
- * - mport – The index of the mport number on the node executing the ./rftp 
+ * - \<mport\> : The index of the mport number on the node executing the ./rftp 
  *           command to be used to send the request.
  *           The default mport number is 0. Enter a non-existant (i.e.  0xUA) 
- *           mport number to display the (mport) values available on the 
+ *           mport number to display the \<mport\> values available on the 
  *           local node, 
- *           and the (destID) values where servers may be running.
- * - dbg – A non-zero dbg value displays error/debug/trace messages
+ *           and the \<destID\> values where servers may be running.
+ * - \<dbg\> : A non-zero dbg value displays error/debug/trace messages
  *            for the file transfer.   This can be useful when learning the
  *            file transfer implementation.
- * - kbuf – The rftp command may use user allocated memory, or kernel buffer
+ * - \<kbuf\> : The rftp command may use user allocated memory, or kernel buffer
  *          memory, to transfer the files.  Kernel buffers are physically 
  *          contiguous memory, which support transfers using a single DMA 
  *          transaction leading to higher performance;

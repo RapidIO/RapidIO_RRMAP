@@ -551,7 +551,7 @@ int test_case_6(void)
 		goto fail;
 
         if (cfg_get_conn_dev(0x70000, 0, &dev, &conn_pt))
-		goto fail;;
+		goto fail;
 
 	return 0;
 fail:

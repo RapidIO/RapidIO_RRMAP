@@ -6,11 +6,15 @@
 TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
-NAME:=switch_api
-HEADERS:=inc
+NAME:=rio_switch
 TARGETS:=lib$(NAME).a
 TEST_TARGET:=$(NAME)_test
 
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
+TEST_TARGETS:=$(patsubst test/%.c,test/%,$(wildcard test/*.c))
+
+HEADERS:=inc
 LOG_LEVEL?=4
 DEBUG?=DEBUG
 
@@ -21,23 +25,16 @@ CFLAGS+=-I$(FMDDIR)/librio_switch/inc
 
 LDFLAGS+=-Wl,--wrap=DARRegRead -Wl,--wrap=DARRegWrite
 LDFLAGS+=-L. -L$(COMMONLIB) -L$(FMDDIR)/libs_a $(LIBS_RPATH) -l$(NAME)
-LDFLAGS+=-lcmocka
 
+TST_LIBS+=-lcli
 
-OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c)) 
-TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
-TEST_TARGETS:=$(patsubst test/%.c,test/%,$(wildcard test/*.c))
-
-.PHONY: all clean test
-
+.PHONY: all clean
 
 ifdef TEST
 all: $(TARGETS) $(TEST_TARGET)
 else
 all: $(TARGETS)
 endif
-
-test: $(TEST_TARGET)
 
 %.a: $(OBJECTS)
 	@echo ---------- Building $@
@@ -46,12 +43,11 @@ test: $(TEST_TARGET)
 src/%.o: src/%.c
 	@echo ---------- Building $@
 	$(CXX) -c $(CFLAGS) $< -o $@ \
-        $(TST_INCS)
+	$(TST_INCS)
 
 test/%.o: test/%.c
 	@echo ---------- Building $@
 	$(CXX) -c $(CFLAGS) $(TST_INCS) $< -o $@
-	
 
 test/%: test/%.o
 	@echo ---------- Building $@
@@ -61,8 +57,8 @@ test/%: test/%.o
 $(TEST_TARGET): $(TEST_TARGETS)
 
 clean:
+	@echo ---------- Cleaning lib$(NAME)...
 	rm -f $(TARGETS) $(OBJECTS) \
-        $(TEST_TARGETS) $(TEST_OBJECTS) \
+	 $(TEST_TARGETS) $(TEST_OBJECTS) \
 	inc/*~ src/*~ test/*~ *~
-
 

@@ -36,6 +36,8 @@ NAME:=fmdd
 TARGETS:=lib$(NAME).a
 HEADERS:=inc/lib$(NAME).h
 
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+
 CC := $(CXX)
 
 CFLAGS=$(CXXFLAGS)
@@ -48,17 +50,20 @@ CFLAGS+=-I../librio_switch/inc
 
 LDFLAGS+=-L. -l$(NAME)
 
-OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
 all: $(TARGETS)
 
 %.a: $(OBJECTS)
+	@echo ---------- Building $@
 	$(AR) rcs $@ $^ 
 
 src/%.o: src/%.c $(HEADERS)
+	@echo ---------- Building $@
 	$(CXX) $(CFLAGS) -c $< -o $@ -ldd -L../libs_a
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) inc/*~ src/*~ *~ *.a
+	@echo ---------- Cleaning lib$(NAME)...
+	rm -f $(TARGETS) $(OBJECTS) \
+	src/*~ *~
 
 .PHONY: all clean

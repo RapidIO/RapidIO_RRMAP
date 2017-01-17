@@ -64,4 +64,5 @@ src/%.o:src/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 clean:
+	@echo ---------- Cleaning lib$(NAME)...
 	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(OBJECTS) inc/*~ src/*~ *~

@@ -916,7 +916,7 @@ uint32_t idt_tsi721_pc_reset_link_partner(
     idt_pc_reset_link_partner_in_t   *in_parms, 
     idt_pc_reset_link_partner_out_t  *out_parms )
 {
-    uint32_t rc = RIO_ERR_INVALID_PARAMETER;;
+    uint32_t rc = RIO_ERR_INVALID_PARAMETER;
 
     out_parms->imp_rc = RIO_SUCCESS;
 

@@ -9,8 +9,8 @@ MTU='/bin/true';
 [ -z "$1" ] || {
 	MTU=$1;
 	if (($MTU < 576 || $MTU > 65500)); then
-		echo "Invalid MTU=$MTU. ¡Hasta la vista!" 1>&2
-		exit 42;
+		echo "Invalid MTU=$MTU. Must be between 576 and 65500." 1>&2
+		exit 3;
 	fi
 	MTU="/sbin/ifconfig rsock0 mtu $MTU";
 }

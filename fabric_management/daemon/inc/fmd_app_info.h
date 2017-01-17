@@ -60,11 +60,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rapidio_mport_mgmt.h>#include <rapidio_mport_rdma.h>#include <rapidio_mport_sock.h>
 
 #include "libcli.h"
-#include "librskt_private.h"
-#include "librsktd.h"
-#include "librdma.h"
-#include "liblist.h"
-#include "librsktd_dmn_info.h"
+#include "fmd_app_msg.h"
 
 #ifndef __FMD_APP_INFO_H__
 #define __FMD_APP_INFO_H__

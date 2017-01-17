@@ -31,26 +31,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#ifndef __GOODPUT_CLI_H__
-#define __GOODPUT_CLI_H__
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
 
-#include "libcli.h"
-#include "goodput.h"
-#include "worker.h"
+#include "math_util.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief Bind goodput commands into CLI base
+ * Returns the nearest power of 2 greater than or equal to the input parameter.
  *
- */
+ * @param[in] val Request the nearest power of two greater than or equal to
+ *                this value.
+ *
+ * @return Power of 2 greater than or equal to
+*/
 
-void bind_goodput_cmds(void);
+uint64_t roundup_pw2(uint64_t val)
+{
+	uint64_t i = 1;
+
+	if (!val) {
+		return 0;
+	}
+
+	if (val > 0x8000000000000000) {
+		return 0;
+	}
+
+	while (val > i) {
+		i = i << 1;
+	}
+
+	return i;
+}
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __GOODPUT_CLI_H__ */

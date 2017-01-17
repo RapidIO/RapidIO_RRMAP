@@ -113,10 +113,13 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 	idt_sc_dev_ctrs_t *dc;
 	const char *oth_name;
 	bool got_one = false;
-
-        if (0) {
-           argv[0][0] = argc;
-	}
+	bool chk_rx_tx = false;
+	bool sc_tx = false;
+	bool chk_rio_oth = false;
+	bool sc_srio = true;
+	bool chk_flags = true;
+	uint32_t flags = 0;
+	int i = 0;
 
         if (NULL == pe_h) {
                 LOGMSG(env, "\nNo Device Selected...\n");
@@ -135,11 +138,69 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 		oth_name = "??????";
 	}
 
+	while (i < argc) {
+		switch(parm_idx(argv[i], (char *)SC_GEN_FLAG_NAMES)) {
+		case SC_F_TX: chk_rx_tx = true;
+				sc_tx = true;
+				break;
+		case SC_F_RX: chk_rx_tx = true;
+				sc_tx = false;
+				break;
+		case SC_F_SRIO: chk_rio_oth = true;
+				sc_srio = true;
+				break;
+		case SC_F_OTH: chk_rio_oth = true;
+				sc_srio = false;
+				break;
+		default:
+			switch(parm_idx(argv[i], (char *)SC_FLAG_NAMES)) {
+			case sc_f_DROP: flags |= SC_F_DROP;
+				chk_flags = true;
+				break;
+			case sc_f_ERR: flags |= SC_F_ERR;
+				chk_flags = true;
+				break;
+			case sc_f_RTY: flags |= SC_F_RTY;
+				chk_flags = true;
+				break;
+			case sc_f_CS: flags |= SC_F_CS;
+				chk_flags = true;
+				break;
+			case sc_f_PKT: flags |= SC_F_PKT;
+				chk_flags = true;
+				break;
+			case sc_f_DATA: flags |= SC_F_DATA;
+				chk_flags = true;
+				break;
+			default:
+				LOGMSG(env, "\nUnknown flag \"%s\"\n", argv[i]);
+				goto exit;
+			}
+		}
+		i++;
+	}
+
 	for (val_p = 0; val_p < dc->valid_p_ctrs; ++val_p) {
 		for (cntr = 0; cntr < dc->p_ctrs[val_p].ctrs_cnt; cntr++) {
-			if (!dc->p_ctrs[val_p].ctrs[cntr].last_inc &&
-				!dc->p_ctrs[val_p].ctrs[cntr].total) {
+			idt_sc_ctr_val_t *stctr = &dc->p_ctrs[val_p].ctrs[cntr];
+			// Never print counters that are zero
+			if (!stctr->last_inc && !stctr->total) {
 				continue;
+			}
+			if (chk_rx_tx) {
+				if (stctr->tx != sc_tx) {
+					continue;
+				};
+			}
+			if (chk_rio_oth) {
+				if (stctr->srio != sc_srio) {
+					continue;
+				};
+			}
+			if (chk_flags) {
+				if ((flags & SC_FLAG(stctr->sc)) != flags) {
+					continue;
+				}
 			}
 			if (!got_one) {
 				got_one = true;
@@ -148,17 +209,15 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 			LOGMSG(env,
 				"\n%2d  %2s %8s %6s 0x%8x 0x%16llx",
 				dc->p_ctrs[val_p].pnum,
-				dc->p_ctrs[val_p].ctrs[cntr].tx ?
-						(char *)"TX" : (char *)"RX",
-				SC_NAME(dc->p_ctrs[val_p].ctrs[cntr].sc),
-				dc->p_ctrs[val_p].ctrs[cntr].srio?
-					(char *)" SRIO ":oth_name,
-				dc->p_ctrs[val_p].ctrs[cntr].last_inc,
-				dc->p_ctrs[val_p].ctrs[cntr].total);
+				stctr->tx ?  (char *)"TX" : (char *)"RX",
+				SC_NAME(stctr->sc),
+				stctr->srio?  (char *)" SRIO ":oth_name,
+				stctr->last_inc,
+				stctr->total);
 		}
 	}
 	if (!got_one) {
-		LOGMSG(env, "\nAll counters are 0.\n");
+		LOGMSG(env, "\nAll counters are 0 or no counters selected.\n");
 	};
 
 	LOGMSG(env, "\n");
@@ -170,8 +229,12 @@ struct cli_cmd CLICountDisplay = {
 (char *)"scdisplay",
 3,
 0,
-(char *)"Statistics counter display for a device",
-(char *)"scdisplay (No parameters)\n",
+(char *)"display statistics counter values for a device",
+(char *)"{flags}\n"
+	"Display selected statistics counters (default is all)\n"
+	"{flags} optional, selects the type of counters to display\n"
+	"        Values are: " SC_GEN_FLAG_NAMES " and \n"
+	"        " SC_FLAG_NAMES "\n",
 CLICountDisplayCmd,
 ATTR_NONE
 };

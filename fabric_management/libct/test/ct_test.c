@@ -218,7 +218,7 @@ void ct_create_all_test(void **state)
 	assert_int_equal(0xdeadbeef, ct);
 	assert_int_equal(-EPERM, ct_create_all(&ct, &did, invld_sz));
 	assert_int_equal(COMPTAG_UNSET, ct);
-	assert_int_equal(0, did_invalid(did));;
+	assert_int_equal(0, did_invalid(did));
 	assert_int_equal(3, ct_idx);
 	assert_int_equal(0, ct_ids[3]);
 

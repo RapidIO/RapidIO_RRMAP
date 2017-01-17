@@ -209,9 +209,9 @@ typedef struct idt_pc_one_port_status_t_TAG
                                 */
     idt_pc_pw_t pw;             /* Port width
                                 */
-    idt_pc_fc  fc;          /* Flow control algorithm for the link
+    enum idt_pc_fc  fc;          /* Flow control algorithm for the link
 				*/
-    idt_pc_idle_seq iseq; /* Idle sequence being used
+    enum idt_pc_idle_seq iseq; /* Idle sequence being used
 			 */
     bool        port_error;     /* true if a fatal error is present which
                                      prevents packet transmission.

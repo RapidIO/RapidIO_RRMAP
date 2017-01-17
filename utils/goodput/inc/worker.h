@@ -128,8 +128,8 @@ struct worker {
 	int stat; /* 0 - dead, 1 - running, 2 stopped */
 	volatile int stop_req; /* 0 - continue, 1 - stop 2 - shutdown, SOFT_RESTART */
 	sem_t run;  /* Managed by controller, post this sem to start a stopped woker */
-	req_type action;
-	req_mode action_mode;
+	enum req_type action;
+	enum req_mode action_mode;
 	int did; /* destID */
 
 	uint64_t rio_addr; /* Target RapidIO address for direct IO and DMA */

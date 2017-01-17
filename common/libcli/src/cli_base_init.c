@@ -38,7 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-extern void (*cons_cleanup)(struct cli_env *env);
+void (*cons_cleanup)(struct cli_env *env);
 
 void default_cons_cleanup(struct cli_env *env)
 {

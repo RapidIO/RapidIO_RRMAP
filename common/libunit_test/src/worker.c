@@ -51,8 +51,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 
 #include <pthread.h>
-#include <sstream>
-
 #include <sched.h>
 
 #include "libcli.h"
@@ -63,6 +61,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+extern struct unit_test_driver drvr;
 
 void init_worker_info(struct worker *info, int first_time)
 {

@@ -75,5 +75,6 @@ $(0)/%: $(0)/samples/%.o
 	-lcli -ltime_utils -lpthread
 
 clean:
+	@echo ---------- Cleaning lib$(NAME)...
 	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(SAMPLE_TARGETS) $(OBJECTS) $(SAMPLE_OBJECTS) inc/*~ src/*~ *~
 

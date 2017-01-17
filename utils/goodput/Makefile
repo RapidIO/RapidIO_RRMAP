@@ -32,6 +32,7 @@
 TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
+NAME=goodput
 DEBUG?=DEBUG
 
 config?=NODEBUG
@@ -60,6 +61,7 @@ goodput: $(SOURCES) $(INCLUDES)
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $@ $(LIBS_RPATH) $(LIBRARIES)
 
 clean:
+	@echo ---------- Cleaning $(NAME)...
 	@rm -f *.o goodput *~ src/*~ inc/*~ gmon.out *.log
 
 FORCE:

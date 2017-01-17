@@ -43,7 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include "rio_ecosystem.h"
-#include "rapidio_mport_sock.h"
+#include "rapidio_mport_dma.h"
 #include "string_util.h"
 #include "tok_parse.h"
 #include "rio_misc.h"
@@ -52,6 +52,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "librsvdmem.h"
 #include "liblog.h"
 #include "assert.h"
+#include "math_util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -822,6 +823,7 @@ int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type 
 	uint64_t bytes;
 	uint64_t acc_sz;
 	uint16_t wr;
+	uint32_t min_obwin_size = 0x10000;
 
 	int n = 0;
 	if (gp_parse_worker_index_check_thread(env, argv[n++], &idx, 1)) {
@@ -879,7 +881,23 @@ int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type 
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = acc_sz;
 	wkr[idx].wr = wr;
-	wkr[idx].ob_byte_cnt = (direct_io == action ? bytes : 0x10000);
+	// Set up the size of the outbound window, which must be:
+	// - at least 0x10000 bytes
+	// - larger than the bytes to transfer,
+	// - a power of 2.
+	wkr[idx].ob_byte_cnt = min_obwin_size;
+	if ((direct_io == action) && (bytes > min_obwin_size)) {
+		wkr[idx].ob_byte_cnt = roundup_pw2(bytes);
+		if (!wkr[idx].ob_byte_cnt) { 
+			LOGMSG(env, "\nInvalid outbound window size\n");
+			goto exit;
+		}
+	}
+
+	if (bytes % acc_sz) {
+		LOGMSG(env, "\nBytes must be a multiple of acc_sz\n");
+		goto exit;
+	}
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
@@ -901,7 +919,7 @@ struct cli_cmd OBDIO = {
 	"<idx>      is a worker index from 0 to " STR(MAX_WORKER_IDX) "\n"
 	"<did>      target device ID\n"
 	"<rio_addr> RapidIO memory address to access\n"
-	"<bytes>    total bytes to transfer\n"
+	"<bytes>    total bytes to transfer, must be a multiple of <acc_sz>\n"
 	"<acc_sz>   access size, 1, 2, 4, 8\n"
 	"<wr>       0: Read, 1: Write\n",
 OBDIOCmd,
@@ -950,7 +968,7 @@ ATTR_NONE
 };
 
 // "<trans>  0 NW, 1 SW, 2 NW_R, 3 SW_R 4 NW_R_ALL\n"
-riomp_dma_directio_type convert_int_to_riomp_dma_directio_type(uint16_t trans)
+enum riomp_dma_directio_type convert_int_to_riomp_dma_directio_type(uint16_t trans)
 {
 	switch (trans) {
 	default:
@@ -1418,7 +1436,7 @@ msgTxLatCmd,
 ATTR_NONE
 };
 
-int msgRxCmdExt(struct cli_env *env, int UNUSED(argc), char **argv, req_type action)
+int msgRxCmdExt(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type action)
 {
 	uint16_t idx;
 	uint16_t sock_num;

@@ -32,10 +32,12 @@
 TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
-LOG_LEVEL?=4
-
 NAME:=dd
 TARGETS:=lib$(NAME).a
+
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+
+LOG_LEVEL?=4
 HEADERS:=inc/lib$(NAME).h
 
 XFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
@@ -51,17 +53,22 @@ CXXFLAGS += $(XFLAGS)
 
 LDFLAGS+=-L. -l$(NAME)
 
-OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
+
+
+.PHONY: all clean
 
 all: $(TARGETS)
 
 %.a: $(OBJECTS)
+	@echo ---------- Building $@
 	$(AR) rcs $@ $^
 
 src/%.o: src/%.c $(HEADERS)
+	@echo ---------- Building $@
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) inc/*~ src/*~ *~ *.a
+	@echo ---------- Cleaning lib$(NAME)...
+	rm -f $(TARGETS) $(OBJECTS) \
+	src/*~ *~
 
-.PHONY: all clean

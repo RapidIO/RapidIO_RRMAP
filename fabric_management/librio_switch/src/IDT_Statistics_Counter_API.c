@@ -41,49 +41,60 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-char *sc_names[(uint8_t)(idt_sc_last)+2] = {
-    (char *)"Disabled__",
-    (char *)"Enabled___",
-    (char *)"UC_REQ_PKT", // Tsi57x start
-    (char *)"UC_ALL_PKT",
-    (char *)"Retry___CS",
-    (char *)"All_____CS",
-    (char *)"UC_4B_Data",
-    (char *)"MCast__PKT",
-    (char *)"MECS____CS",
-    (char *)"MC_4B_Data", // Tsi57x end
-    (char *)"PktAcc__CS", // CPS1848 start
-    (char *)"ALL____PKT",
-    (char *)"PktNotA_CS",
-    (char *)"Drop___PKT",
-    (char *)"DropTTLPKT", // CPS1848 end
-    (char *)"FAB____PKT", // RXS start
-    (char *)"8B_DAT_PKT",
-    (char *)"8B_DAT_PKT",
-    (char *)"RAW_BWIDTH", // RXS end
-    (char *)"PCI_M__PKT",
-    (char *)"PCI_M__PKT",
-    (char *)"PCI__D_PKT",
-    (char *)"PCI__D_PKT",
-    (char *)"PCI_BG_PKT",
-    (char *)"PCI_BG_PKT",
-    (char *)"NWR____PKT",
-    (char *)"NWR_OK_PKT",
-    (char *)"DB_____PKT",
-    (char *)"DB__OK_PKT",
-    (char *)"MSG____PKT",
-    (char *)"MSG____PKT",
-    (char *)"MSG_RTYPKT",
-    (char *)"MSG_RTYPKT",
-    (char *)"DMA____PKT",
-    (char *)"DMA____PKT",
-    (char *)"BRG____PKT",
-    (char *)"BRG____PKT",
-    (char *)"BRG_ERRPKT",
-    (char *)"MWR____PKT",
-    (char *)"MWR_OK_PKT",
-    (char *)"Last______",
-    (char *)"Invalid___"
+sc_info_t sc_info[(uint8_t)(idt_sc_last)+2] = {
+    { (char *)"Disabled__", 0},
+    { (char *)"Enabled___", 0},
+    { (char *)"UC_REQ_PKT", SC_F_PKT}, // Tsi57x start
+    { (char *)"UC_ALL_PKT", SC_F_PKT},
+    { (char *)"Retry___CS", SC_F_CS | SC_F_RTY },
+    { (char *)"All_____CS", SC_F_CS },
+    { (char *)"UC_4B_Data", SC_F_DATA},
+    { (char *)"MCast__PKT", SC_F_PKT},
+    { (char *)"MECS____CS", SC_F_CS},
+    { (char *)"MC_4B_Data", SC_F_DATA}, // Tsi57x end
+    { (char *)"PktAcc__CS", SC_F_CS}, // CPS1848 start
+    { (char *)"ALL____PKT", SC_F_PKT},
+    { (char *)"PktNotA_CS", SC_F_CS | SC_F_ERR},
+    { (char *)"Drop___PKT", SC_F_PKT | SC_F_ERR | SC_F_DROP},
+    { (char *)"DropTTLPKT", SC_F_PKT | SC_F_ERR | SC_F_DROP}, // CPS1848 end
+    { (char *)"FAB____PKT", SC_F_PKT}, // RXS start
+    { (char *)"8B_DAT_PKT", SC_F_DATA},
+    { (char *)"8B_DAT_PKT", SC_F_DATA},
+    { (char *)"RAW_BWIDTH", 0}, // RXS end
+    { (char *)"PCI_M__PKT", SC_F_PKT},
+    { (char *)"PCI_M__PKT", SC_F_PKT},
+    { (char *)"PCI__D_PKT", SC_F_PKT},
+    { (char *)"PCI__D_PKT", SC_F_PKT},
+    { (char *)"PCI_BG_PKT", SC_F_PKT},
+    { (char *)"PCI_BG_PKT", SC_F_PKT},
+    { (char *)"NWR____PKT", SC_F_PKT},
+    { (char *)"NWR_OK_PKT", SC_F_PKT},
+    { (char *)"DB_____PKT", SC_F_PKT},
+    { (char *)"DB__OK_PKT", SC_F_PKT},
+    { (char *)"MSG____PKT", SC_F_PKT},
+    { (char *)"MSG____PKT", SC_F_PKT},
+    { (char *)"MSG_RTYPKT", SC_F_PKT | SC_F_RTY},
+    { (char *)"MSG_RTYPKT", SC_F_PKT | SC_F_RTY},
+    { (char *)"DMA____PKT", SC_F_PKT},
+    { (char *)"DMA____PKT", SC_F_PKT},
+    { (char *)"BRG____PKT", SC_F_PKT},
+    { (char *)"BRG____PKT", SC_F_PKT},
+    { (char *)"BRG_ERRPKT", SC_F_PKT | SC_F_ERR},
+    { (char *)"MWR____PKT", SC_F_PKT},
+    { (char *)"MWR_OK_PKT", SC_F_PKT},
+    { (char *)"Last______", 0},
+    { (char *)"Invalid___", 0}
+};
+
+char *sc_flag_names[(uint8_t)(sc_f_LAST)+2] = {
+	(char *)"DROP",
+	(char *)"ERR",
+	(char *)"RTY",
+	(char *)"CS",
+	(char *)"PKT",
+	(char *)"DATA",
+	(char *)"Last",
+	(char *)"Ivld"
 };
 
 const char *sc_other_if_names_PCIe = (char *)"PCIExp";

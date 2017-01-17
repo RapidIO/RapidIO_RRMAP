@@ -81,11 +81,15 @@ int add_commands_to_cmd_db(int num_cmds, struct cli_cmd **cmd_list)
  *
  *****************************************************************************/
 
+#define CMD_NOT_FOUND -1
+#define CMD_DUP_FOUND -2
+#define CMD_FOUND      0
+
 int find_cmd(char *cmd_name, struct cli_cmd **cmd)
 {
 	int    i;
 	size_t numChars;
-	int    foundIndex = -1;
+	int    foundIndex = CMD_NOT_FOUND;
 
 	*cmd = NULL;
 
@@ -100,12 +104,12 @@ int find_cmd(char *cmd_name, struct cli_cmd **cmd)
 			 */
 			if (numChars >= cmds[i]->min_match) {
 				*cmd = cmds[i];
-				foundIndex = 0;
+				foundIndex = CMD_FOUND;
 				break;
 			};
 			/* If previously found at least a partial match, fail */
-			if (foundIndex != -1) {
-				foundIndex = -2;
+			if (foundIndex != CMD_NOT_FOUND) {
+				foundIndex = CMD_DUP_FOUND;
 				break;
 			}
 			/* Have at least a partial match */
@@ -139,13 +143,13 @@ int CLIHelpCmd(struct cli_env *env, int argc, char **argv)
 	} else {
 		idx = find_cmd(argv[0], &cmd_ptr);
 		switch (idx) {
-		case 0:
+		case CMD_FOUND:
 			cli_print_help(env, cmd_ptr);
 			break;
-		case -1:
+		case CMD_NOT_FOUND:
 			LOGMSG(env, "\nCommand \"%s\" not found.\n", argv[0]);
 			break;
-		case -2:
+		case CMD_DUP_FOUND:
 			LOGMSG(env, "\n\"%s\" ambiguous, use a longer name.\n",
 					argv[0]);
 			break;

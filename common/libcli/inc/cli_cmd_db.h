@@ -44,8 +44,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-extern void (*cons_cleanup)(struct cli_env *env);
-
 int find_cmd(char *cmd_name, struct cli_cmd **cmd);
 int init_cmd_db();
 

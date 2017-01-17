@@ -189,7 +189,7 @@ int do_buf_test(uint32_t mport_id, uint64_t rio_base, uint32_t ib_size,
 	uint64_t seg_handle;
 	uint32_t seg_size;
 	void *ibmap;
-	int i, err_count = 0;;
+	int i, err_count = 0;
 	int status = 0;
 	pid_t pid, wpid;
 
