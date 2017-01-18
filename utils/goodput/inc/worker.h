@@ -199,6 +199,11 @@ struct worker {
 	struct seq_ts desc_ts;
 	struct seq_ts fifo_ts;
 	struct seq_ts meas_ts;
+
+	uint16_t ssdist;
+	uint16_t sssize;
+	uint16_t dsdist;
+	uint16_t dssize;
 };
 
 /**

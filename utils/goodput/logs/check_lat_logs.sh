@@ -136,12 +136,12 @@ fi
 # ONLY PASS IF THE PASS FILE EXISTS AND THE FAIL FILE DOESN'T
 
 if [ ! -s ${PASS} ]; then
-	echo "FAILED, ${PASS} either does not exist or is empty!"
+	echo "$0 - FAILED, ${PASS} either does not exist or is empty!"
 else
 	if [ -f ${FAIL} ]; then
-		echo "FAILED!"
+		echo "$0 - FAILED!"
 		cat ${FAIL}
 	else
-		echo "PASSED!"
+		echo "$0 - PASSED!"
 	fi
 fi

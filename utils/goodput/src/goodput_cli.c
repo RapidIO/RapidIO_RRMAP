@@ -980,7 +980,7 @@ enum riomp_dma_directio_type convert_int_to_riomp_dma_directio_type(uint16_t tra
 	};
 }
 
-int dmaCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+int dmaCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx;
 	uint32_t did;
@@ -1038,6 +1038,40 @@ int dmaCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		goto exit;
 	}
 
+	/* Optional parameters - ssdist, sssize, dsdist, dssize */
+	wkr[idx].ssdist = 0;
+	wkr[idx].sssize = 0;
+	wkr[idx].dsdist = 0;
+	wkr[idx].dssize = 0;
+	if (argc > 9) {
+		if (tok_parse_ushort(argv[n++], &wkr[idx].ssdist, 0, 0xFFFF, 0)) {
+			LOGMSG(env, "\n");
+			LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<ssdist>", 0, 0xFFFF);
+			goto exit;
+		}
+		if (argc > 10) {
+			if (tok_parse_ushort(argv[n++], &wkr[idx].sssize, 0, 0x0FFF, 0)) {
+				LOGMSG(env, "\n");
+				LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<sssize>", 0, 0x0FFF);
+				goto exit;
+			}
+			if (argc > 11) {
+				if (tok_parse_ushort(argv[n++], &wkr[idx].dsdist, 0, 0xFFFF, 0)) {
+					LOGMSG(env, "\n");
+					LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dsdist>", 0, 0xFFFF);
+					goto exit;
+				}
+				if (argc > 12) {
+					if (tok_parse_ushort(argv[n++], &wkr[idx].dssize, 0, 0x0FFF, 0)) {
+						LOGMSG(env, "\n");
+						LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dssize>", 0, 0x0FFF);
+						goto exit;
+					}
+				}
+			}
+		}
+	}
+
 	wkr[idx].action = dma_tx;
 	wkr[idx].action_mode = kernel_action;
 	wkr[idx].did = did;
@@ -1061,7 +1095,7 @@ struct cli_cmd dma = {
 3,
 9,
 "Measure goodput of DMA reads/writes",
-"dma <idx> <did> <rio_addr> <bytes> <acc_sz> <wr> <kbuf> <trans> <sync>\n"
+"dma <idx> <did> <rio_addr> <bytes> <acc_sz> <wr> <kbuf> <trans> <sync> [<ssdist> <sssize> <dsdist> <dssize>]\n"
 	"<idx>      is a worker index from 0 to " STR(MAX_WORKER_IDX) "\n"
 	"<did>      target device ID\n"
 	"<rio_addr> RapidIO memory address to access\n"
@@ -1070,7 +1104,11 @@ struct cli_cmd dma = {
 	"<wr>       0: Read, 1: Write\n"
 	"<kbuf>     0: User memory, 1: Kernel buffer\n"
 	"<trans>    0: NW, 1: SW, 2: NW_R, 3: SW_R, 4: NW_R_ALL\n"
-	"<sync>     0: SYNC, 1: ASYNC, 2: FAF\n",
+	"<sync>     0: SYNC, 1: ASYNC, 2: FAF\n"
+	"<ssdist>   source stride distance (Optional, default to 0)\n"
+	"<sssize>   source stride size (Optional, default to 0)\n"
+	"<dsdist>   destination stride distance (Optional, default to 0)\n"
+	"<dssize>   destination stride size (Optional, default to 0)\n",
 dmaCmd,
 ATTR_NONE
 };

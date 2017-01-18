@@ -142,6 +142,12 @@ void init_worker_info(struct worker *info, int first_time)
 	init_seq_ts(&info->desc_ts, MAX_TIMESTAMPS);
 	init_seq_ts(&info->fifo_ts, MAX_TIMESTAMPS);
 	init_seq_ts(&info->meas_ts, MAX_TIMESTAMPS);
+
+	info->ssdist = 0;
+	info->sssize = 0;
+	info->dsdist = 0;
+	info->dssize = 0;
+
 };
 
 void msg_cleanup_con_skt(struct worker *info);
@@ -629,6 +635,12 @@ void dealloc_dma_tx_buffer(struct worker *info)
 int single_dma_access(struct worker *info, uint64_t offset)
 {
 	int dma_rc = 0;
+	struct rapidio_mport_interleave interleave;
+
+	interleave.ssdist = info->ssdist;
+	interleave.sssize = info->sssize;
+	interleave.dsdist = info->dsdist;
+	interleave.dssize = info->dssize;
 
 	do {
 		if (info->use_kbuf && info->wr)
@@ -639,7 +651,8 @@ int single_dma_access(struct worker *info, uint64_t offset)
 						offset,
 						info->acc_size,
 						info->dma_trans_type,
-						info->dma_sync_type);
+						info->dma_sync_type,
+						&interleave);
 
 		if (info->use_kbuf && !info->wr)
 			dma_rc = riomp_dma_read_d(info->mp_h,
@@ -648,7 +661,8 @@ int single_dma_access(struct worker *info, uint64_t offset)
 						info->rdma_kbuff,
 						offset,
 						info->acc_size,
-						info->dma_sync_type);
+						info->dma_sync_type,
+						&interleave);
 
 		if (!info->use_kbuf && info->wr)
 			dma_rc = riomp_dma_write(info->mp_h,
@@ -657,7 +671,8 @@ int single_dma_access(struct worker *info, uint64_t offset)
 						ADDR_P(info->rdma_ptr, offset),
 						info->acc_size,
 						info->dma_trans_type,
-						info->dma_sync_type);
+						info->dma_sync_type,
+						&interleave);
 
 		if (!info->use_kbuf && info->wr)
 			dma_rc = riomp_dma_read(info->mp_h,
@@ -665,7 +680,8 @@ int single_dma_access(struct worker *info, uint64_t offset)
 						ADDR_L(info->rio_addr, offset),
 						ADDR_P(info->rdma_ptr, offset),
 						info->acc_size,
-						info->dma_sync_type);
+						info->dma_sync_type,
+						&interleave);
 	} while ((EINTR == -dma_rc) || (EBUSY == -dma_rc) || (EAGAIN == -dma_rc));
 
 	return dma_rc;

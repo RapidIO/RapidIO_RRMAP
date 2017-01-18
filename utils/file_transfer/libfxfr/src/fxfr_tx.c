@@ -217,7 +217,8 @@ void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 				idx * MAX_TX_BUFF_SIZE,
 				info->bytes_txed,
 				RIO_DIRECTIO_TYPE_NWRITE,
-				RIO_DIRECTIO_TRANSFER_SYNC);
+				RIO_DIRECTIO_TRANSFER_SYNC,
+				NULL);
 		} else {
 			rc = riomp_dma_write(info->mp_h, 
 				info->destID, 
@@ -226,7 +227,8 @@ void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 				info->buffers[idx], 
 				info->bytes_txed,
 				RIO_DIRECTIO_TYPE_NWRITE,
-				RIO_DIRECTIO_TRANSFER_SYNC);
+				RIO_DIRECTIO_TRANSFER_SYNC,
+				NULL);
 		};
 	};
 	if (rc < 0) {

@@ -76,13 +76,13 @@ SIZE_STRINGS=( XOutput XProcessing XSIZE
 	"X0x400000"
 	"X0x18" )
 
-SIZE_COUNT=( 11 11 11
+SIZE_COUNT=( 20 20 13
 	12 12 12 12
 	8 9 9 9
 	9 9 9 9
 	9 8 8 8
 	8 8 8 8
-	8 8 8 
+	24 8 8 
 	1 )
 
 IDX=0
@@ -136,12 +136,12 @@ fi
 # ONLY PASS IF THE PASS FILE EXISTS AND THE FAIL FILE DOESN'T
 
 if [ ! -s ${PASS} ]; then
-	echo "FAILED, ${PASS} either does not exist or is empty!"
+	echo "$0 - FAILED, ${PASS} either does not exist or is empty!"
 else
 	if [ -f ${FAIL} ]; then
-		echo "FAILED!"
+		echo "$0 - FAILED!"
 		cat ${FAIL}
 	else
-		echo "PASSED!"
+		echo "$0 - PASSED!"
 	fi
 fi

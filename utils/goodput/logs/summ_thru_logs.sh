@@ -1,61 +1,85 @@
-#!/bin/bash
+#!/usr/bin/python3
 
-## This script grabs the goodput figures from a file, along with CPU occupancy
-## It also displays the size of the transfer
+import os
 
-SUFFIX=log
-OSUFFIX=res
+debug = False
 
-if [ -n "$1" ]; then
-	SUFFIX=$1
-fi
 
-if [ -n "$2" ]; then
-	OSUFFIX=$2
-fi
+def summarize_thruput_log(fname):
+    """Summarize thruput log file
+    """
+    outList    = []
+    outfname = fname + ".res"
+    outList.append("Processing throughput log file: {f}".format(f=fname))
+    outList.append("Output filename is:             {f}".format(f=outfname))
 
-function summarize_thruput_log {
-	IN_FILE=$1
+    with open(fname, 'r') as f:
+        fdataList = f.readlines()
+        echo=None
+        total    = None
+        xfersize = None
+        availCpu = None
+        ssdist   = None
+        sssize   = None
+        dsdist   = None
+        dssize   = None
+        hdrPrinted = False
 
-	TEMP_FILE1=$1'.temp1'
-	TEMP_FILE2=$1'.temp2'
-	TEMP_FILE3=$1'.temp3'
-	OUT_FILE=$1'.'$OSUFFIX
+        for index, line in enumerate(fdataList):
+            if "Kernel" in line:
+                kernelLine = fdataList[index + 1].split()
+                try:
+                    availCpu, procUser, procKern, cpuOcc = kernelLine
+                except ValueError:
+                    print("Error in Kernel record - expecting 4 fields got {len}: {l}".format(len=len(kernelLine), l=kernelLine)) 
+                    raise
+                if debug: print("Kernel: {avail} {pu} {pk} {cpu}".format(avail=availCpu, pu=procUser, pk=procKern, cpu=cpuOcc))
+            if "Total" in line and echo is not None:
+                # only pick off the "Total" line after the 'echo' line has been found
+                try:
+                    total, data, mbps, gbps, _msgs, linkOcc = line.split()
+                except ValueError:
+                    print("Error in Total line - expecting 6 fields got {len}: {l}".format(l=line, len=len(line.split())))
+                if debug: print("Total: {t} {data} {mbps} {gbps} {linkOcc}".format(t=total, data=data, mbps=mbps, gbps=gbps, linkOcc=linkOcc))
+            if "echo" in line:
+                try:
+                    echo, _dma, _throughput, blksize, xfersize, _other = line.split()
+                except ValueError:
+                    try:
+                        echo, _dma, _throughput, blksize, xfersize, _other, ssdist, sssize, dsdist, dssize = line.split()
+                    except ValueError:
+                        print("Error in echo line - expecting 6 or 10 fields got {len}: {l}".format(l=line, len=len(line.split())))
+                if debug: print("Echo: {blk} {xfer}".format(blk=blksize, xfer=xfersize))
+            if total is not None and xfersize is not None and availCpu is not None:
+                if not hdrPrinted:
+                    hdr = "{xfer:>8} {mbps:>8} {gbps:>8} {linkOcc:>8} {availCpu:>8} {pu:>8} {pk:>8} {cpuOcc:>8}".format(xfer="SIZE", mbps="Mbps", gbps="Gbps", linkOcc="LinkOcc", availCpu="AvailCpu", pu="UserCPU", pk="KernCpu", cpuOcc="CPU OCC %")
+                    if ssdist is not None:
+                        hdr += "{ssdist:>8} {sssize:>8} {dsdist:>8} {dssize:>8}".format(ssdist="ssdist", sssize="sssize", dsdist="dsdist", dssize="dssize")
+                    outList.append(hdr)
+                    hdrPrinted = True
 
-	echo $'\nProcessing througput log file : ' $IN_FILE 
-	echo $'Output filename is            : ' $OUT_FILE 
-	
-	## Get CPU OCC measurements, performance measurements, and labels
-	awk '/Kernel/{li=$0;getline;print li $0}
-	/Total/{print}
-	/echo/{print}' $IN_FILE  > $TEMP_FILE1
-	
-	### Contatenate groups of 3 lines together
-	
-	awk '
-	BEGIN {getline; l1 = $0; getline; l2 = $0}
-	{print l1 " " l2 " " $0; l1 = l2; l2 = $0}
-	' $TEMP_FILE1 > $TEMP_FILE2
-	
-	## Only keep lines with echo, Total, and Kernel
-	grep -E '(^echo.*Total.*Kernel)' $TEMP_FILE2 > $TEMP_FILE3
-	
-	## Reformat each line, and add a header...
-	awk '
-	BEGIN {print "SIZE        MBps     Gbps   LinkOcc  AvailCPU  UserCPU  KernCPU CPU OCC %"}
-	{printf "%8s %9s %8s %8s %8s %8s %8s %8s\n", $5, $9, $10, $12, $17, $18, $19, $20}
-	' $TEMP_FILE3 > $OUT_FILE
+                outLine = "{xfer:>8} {mbps:>8} {gbps:>8} {linkOcc:>8} {availCpu:>8} {pu:>8} {pk:>8} {cpuOcc:>8}".format(xfer=xfersize, mbps=mbps, gbps=gbps, linkOcc=linkOcc, availCpu=availCpu, pu=procUser, pk=procKern, cpuOcc=cpuOcc)
+                if ssdist is not None:
+                    outLine += " {ssdist:>8} {sssize:>8} {dsdist:>8} {dssize:>8}".format(ssdist=ssdist, sssize=sssize, dsdist=dsdist, dssize=dssize)
+                outList.append(outLine)
+                echo = None
+                xfersize = None
+                availCpu = None
 
-	rm $TEMP_FILE1 $TEMP_FILE2 $TEMP_FILE3
-	cat $OUT_FILE
-}
+        outList.append("")
 
-dir_list="$(ls *thru_*.${SUFFIX} | grep -v done)"
+        with open(outfname, 'w') as f:
+            for l in outList:
+                print(l)
+                f.write("{l}\n".format(l=l))
 
-if [ ${#dir_list[@]} -eq 0 ]; then
-        exit
-fi
+print("Scanning directory for log files")
+for dirname, dirnames, filenames in os.walk('.'):
+    for filename in filenames:
+        if os.path.splitext(filename)[1] in [".log"]:
+            try:
+                summarize_thruput_log(os.path.join(dirname, filename))
+            except ValueError:
+                # should be save to ignore ValueError messages
+                pass
 
-for f in ${dir_list[@]}; do
-        summarize_thruput_log ${f}
-done

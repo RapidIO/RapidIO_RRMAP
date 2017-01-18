@@ -17,6 +17,10 @@ echo device ID before this script can be run!!!
 // UNKNOWN
 . dma_thru_write
 // UNKNOWN
+. dma_thru_interleave_read
+// UNKNOWN
+. dma_thru_interleave_write
+// UNKNOWN
 . dma_lat_read
 // UNKNOWN
 . pdma_thru_pdd_write

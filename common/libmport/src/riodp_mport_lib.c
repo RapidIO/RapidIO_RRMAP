@@ -295,7 +295,7 @@ static inline enum rio_transfer_sync convert_directio_sync(enum riomp_dma_direct
  */
 int riomp_dma_write(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_addr, void *buf,
 		uint32_t size, enum riomp_dma_directio_type wr_mode,
-		enum riomp_dma_directio_transfer_sync sync)
+		enum riomp_dma_directio_transfer_sync sync, rapidio_mport_interleave *interleave)
 {
 	struct rio_transaction tran;
 	struct rio_transfer_io xfer;
@@ -312,6 +312,18 @@ int riomp_dma_write(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_ad
 	xfer.handle = 0;
 	xfer.offset = 0;
 	xfer.method = convert_directio_type(wr_mode);
+	if (interleave == NULL) {
+		xfer.ssdist = 0;
+		xfer.sssize = 0;
+		xfer.dsdist = 0;
+		xfer.dssize = 0;
+	} else {
+
+		xfer.ssdist = interleave->ssdist;
+		xfer.sssize = interleave->sssize;
+		xfer.dsdist = interleave->dsdist;
+		xfer.dssize = interleave->dssize;
+	}
 
 	tran.transfer_mode = RIO_TRANSFER_MODE_TRANSFER;
 	tran.sync = convert_directio_sync(sync);
@@ -329,7 +341,7 @@ int riomp_dma_write(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_ad
 int riomp_dma_write_d(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_addr,
 		      uint64_t handle, uint32_t offset, uint32_t size,
 		      enum riomp_dma_directio_type wr_mode,
-		      enum riomp_dma_directio_transfer_sync sync)
+		      enum riomp_dma_directio_transfer_sync sync, rapidio_mport_interleave *interleave)
 {
 	struct rio_transaction tran;
 	struct rio_transfer_io xfer;
@@ -347,6 +359,17 @@ int riomp_dma_write_d(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_
 			      //    baddr = (dma_addr_t)xfer->handle;
 	xfer.offset = offset;
 	xfer.method = convert_directio_type(wr_mode);
+	if (interleave == NULL) {
+		xfer.ssdist = 0;
+		xfer.sssize = 0;
+		xfer.dsdist = 0;
+		xfer.dssize = 0;
+	} else {
+		xfer.ssdist = interleave->ssdist;
+		xfer.sssize = interleave->sssize;
+		xfer.dsdist = interleave->dsdist;
+		xfer.dssize = interleave->dssize;
+	}
 
 	tran.transfer_mode = RIO_TRANSFER_MODE_TRANSFER;
 	tran.sync = convert_directio_sync(sync);
@@ -363,7 +386,8 @@ int riomp_dma_write_d(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_
  * Perform DMA data read from target transfer using user space destination buffer
  */
 int riomp_dma_read(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_addr, void *buf,
-		   uint32_t size, enum riomp_dma_directio_transfer_sync sync)
+		   uint32_t size, enum riomp_dma_directio_transfer_sync sync,
+			rapidio_mport_interleave *interleave)
 {
 	struct rio_transaction tran;
 	struct rio_transfer_io xfer;
@@ -379,6 +403,17 @@ int riomp_dma_read(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_add
 	xfer.length = size;
 	xfer.handle = 0;
 	xfer.offset = 0;
+	if (interleave == NULL) {
+		xfer.ssdist = 0;
+		xfer.sssize = 0;
+		xfer.dsdist = 0;
+		xfer.dssize = 0;
+	} else {
+		xfer.ssdist = interleave->ssdist;
+		xfer.sssize = interleave->sssize;
+		xfer.dsdist = interleave->dsdist;
+		xfer.dssize = interleave->dssize;
+	}
 
 	tran.transfer_mode = RIO_TRANSFER_MODE_TRANSFER;
 	tran.sync = convert_directio_sync(sync);
@@ -395,7 +430,8 @@ int riomp_dma_read(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_add
  */
 int riomp_dma_read_d(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_addr,
 		     uint64_t handle, uint32_t offset, uint32_t size,
-		     enum riomp_dma_directio_transfer_sync sync)
+		     enum riomp_dma_directio_transfer_sync sync,
+			 rapidio_mport_interleave *interleave)
 {
 	struct rio_transaction tran;
 	struct rio_transfer_io xfer;
@@ -411,6 +447,17 @@ int riomp_dma_read_d(riomp_mport_t mport_handle, uint16_t destid, uint64_t tgt_a
 	xfer.length = size;
 	xfer.handle = handle;
 	xfer.offset = offset;
+	if (interleave == NULL) {
+		xfer.ssdist = 0;
+		xfer.sssize = 0;
+		xfer.dsdist = 0;
+		xfer.dssize = 0;
+	} else {
+		xfer.ssdist = interleave->ssdist;
+		xfer.sssize = interleave->sssize;
+		xfer.dsdist = interleave->dsdist;
+		xfer.dssize = interleave->dssize;
+	}
 
 	tran.transfer_mode = RIO_TRANSFER_MODE_TRANSFER;
 	tran.sync = convert_directio_sync(sync);

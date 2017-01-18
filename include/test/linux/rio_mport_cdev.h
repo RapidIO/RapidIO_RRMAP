@@ -196,6 +196,10 @@ struct rio_transfer_io {
 	__u16 rioid;	/* Target destID */
 	__u16 method;	/* Data exchange method, one of rio_exchange enum */
 	__u32 completion_code;	/* Completion code for this transfer */
+	__u16 ssdist;   /* source stride distance */
+	__u16 sssize;   /* source stride size */
+	__u16 dsdist;   /* destination stride distance */
+	__u16 dssize;   /* destination stride size */
 };
 
 struct rio_transaction {

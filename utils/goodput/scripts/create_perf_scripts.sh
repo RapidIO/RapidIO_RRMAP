@@ -124,6 +124,8 @@ cp -r scripts/performance/* ${MPORT_DIR}
 
 cd ${MPORT_DIR}/dma_thru
 source create_scripts.sh $WAIT_TIME $DID $TRANS $IBA_ADDR $SYNC $MPORT_DIR
+cd ../dma_thru_interleave
+source create_scripts.sh $WAIT_TIME $DID $TRANS $IBA_ADDR $SYNC $MPORT_DIR
 cd ../pdma_thru
 source create_scripts.sh $WAIT_TIME $DID $TRANS $IBA_ADDR $SYNC $SYNC2 $SYNC3 $MPORT_DIR
 cd ../dma_lat
