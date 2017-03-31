@@ -32,14 +32,13 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME:=log
-TARGETS:=lib$(NAME).a lib$(NAME).so
+TARGETS:=lib$(NAME).a
 
 OBJECTS:=$(patsubst src/%.cpp,src/%.o,$(wildcard src/*.cpp))
 OBJECTS:= $(OBJECTS) $(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
 CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
-CXXFLAGS+=-I../../fabric_management/librio_switch/inc
-LINK_FLAGS+= -rdynamic -shared -Wl,-soname,lib$(NAME).so.$(SOVER)
+CXXFLAGS+=-I../../fabric_management/librio/inc
 
 
 .PHONY: all clean test
@@ -49,11 +48,6 @@ all: $(TARGETS)
 %.a: $(OBJECTS)
 	@echo ---------- Building $@
 	$(AR) rcs $@ $^
-
-%.so: $(OBJECTS)
-	@echo ---------- Building $@
-	$(CXX) $(CXXFLAGS) -o $@.$(SOVER) $(OBJECTS) $(LINK_FLAGS)
-	@ln -s $@.$(SOVER) $@ &>/dev/null
 
 src/%.o:src/%.c
 	@echo ---------- Building $@
@@ -65,4 +59,5 @@ src/%.o:src/%.cpp
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...
-	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(OBJECTS) inc/*~ src/*~ *~
+	rm -f $(TARGETS) $(OBJECTS) \
+	inc/*~ src/*~ *~

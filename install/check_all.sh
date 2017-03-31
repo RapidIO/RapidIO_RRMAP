@@ -49,7 +49,7 @@ do
 	fi
 
 	# Check that fmd is running
-	FMD_PID=$(ssh root@"$node" pgrep fmd)
+	FMD_PID=$(ssh root@"$node" pgrep -x fmd)
 	if [ -z "$FMD_PID" ]
 	then
 		echo "   FMD            *NOT* running"

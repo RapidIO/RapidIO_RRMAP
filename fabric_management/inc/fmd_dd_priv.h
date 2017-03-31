@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_DD_PRIV_H__
+#define __FMD_DD_PRIV_H__
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -41,30 +44,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rrmap_config.h"
 #include "fmd_dd.h"
 
-// #include "fmd_state.h"
-
-#ifndef _FMD_DD_PRIV_H_
-#define _FMD_DD_PRIV_H_
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern int fmd_dd_init(char *dd_mtx_fn, int *dd_mtx_fd, 
-			struct fmd_dd_mtx **dd_mtx,
-                	char *dd_fn, int *dd_fd, struct fmd_dd **dd);
+extern int fmd_dd_init(char *dd_mtx_fn, int *dd_mtx_fd,
+		struct fmd_dd_mtx **dd_mtx, char *dd_fn, int *dd_fd,
+		struct fmd_dd **dd);
 extern void fmd_dd_cleanup(char *dd_mtx_fn, int *dd_mtx_fd,
-                        struct fmd_dd_mtx **dd_mtx_p,
-                        char *dd_fn, int *dd_fd, struct fmd_dd **dd_p,
-			int dd_rw);
+		struct fmd_dd_mtx **dd_mtx_p, char *dd_fn, int *dd_fd,
+		struct fmd_dd **dd_p, int dd_rw);
 
 extern void fmd_dd_incr_chg_idx(struct fmd_dd *dd, int dd_rw);
 extern uint32_t fmd_dd_get_chg_idx(struct fmd_dd *dd);
-
-// struct fmd_state;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _FMD_DD_PRIV_H_ */
+#endif /* __FMD_DD_PRIV_H__ */

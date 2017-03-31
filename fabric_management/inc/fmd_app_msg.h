@@ -1,5 +1,3 @@
-/* Definition of messages exchanged between the Fabric Management Daemon 
- * and the Fabric Management Library */
 /*
 ****************************************************************************
 Copyright (c) 2015, Integrated Device Technology Inc.
@@ -33,10 +31,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#include <stdint.h>
-
 #ifndef __FMD_APP_MSG_H__
 #define __FMD_APP_MSG_H__
+
+/**
+ * @file fmd_app_msg.h
+ * Definition of messages exchanged between the Fabric Management Daemon
+ * and the Fabric Management Library
+ */
+
+#include <stdint.h>
 
 #define FMD_APP_MSG_RESP 0x80000000
 #define FMD_APP_MSG_FAIL 0x40000000
@@ -62,19 +66,18 @@ struct fmd_app_hello_resp {
 	uint32_t sm_dd_mtx_idx;
 	char dd_fn[MAX_DD_FN_SZ+1];
 	char dd_mtx_fn[MAX_DD_MTX_FN_SZ+1];
+	uint32_t fmd_update_pd; // Seconds between updates to chg_idx/chg_time
 };
 
 /* Format of messages that can be sent by the library */
 
 struct libfmd_dmn_app_msg { /* Messages sent FROM application TO FMD */
-        uint32_t msg_type;
+	uint32_t msg_type;
 	union {
 		struct fmd_app_hello_req hello_req;
 		struct fmd_app_hello_resp hello_resp;
 	};
 };
-
-#define FMD_APP_MSG_SKT_FMT "/var/tmp/FMD%04d"
 
 #endif /* __FMD_APP_MSG_H__ */
 

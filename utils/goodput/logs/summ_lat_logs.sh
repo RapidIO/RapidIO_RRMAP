@@ -29,7 +29,7 @@ function summarize_latency_log {
 	awk '/0 Run     /{print}
 	/echo/{print}' $IN_FILE  > $TEMP_FILE1
 	
-	### Contatenate groups of 2 lines together
+	### Concatenate groups of 2 lines together
 	
 	awk '
 	BEGIN {getline; l1 = $0;}

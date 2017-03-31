@@ -30,16 +30,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
+
 #ifndef __WORKER_H__
 #define __WORKER_H__
 
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <semaphore.h>
@@ -48,30 +46,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/sem.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
-#include <sys/stat.h>
 
-#include <stdint.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <pthread.h>
 
-#include <string>
-#include <sstream>
-
+#include "rio_route.h"
 #include "rapidio_mport_dma.h"
 #include "rapidio_mport_mgmt.h"
 #include "rapidio_mport_sock.h"
-
 #include "libtime_utils.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -130,12 +122,12 @@ struct worker {
 	sem_t run;  /* Managed by controller, post this sem to start a stopped woker */
 	enum req_type action;
 	enum req_mode action_mode;
-	int did; /* destID */
+	did_val_t did_val;
 
 	uint64_t rio_addr; /* Target RapidIO address for direct IO and DMA */
 	uint64_t byte_cnt; /* Number of bytes to access for direct IO and DMA */
 	uint64_t acc_size; /* Bytes per transfer for direct IO and DMA */
-	int      max_iter; /* For \inft loop tests make this the upper bound of loops*/
+	int      max_iter; /* For infinite loop tests make this the upper bound of loops*/
 
 	int wr; 
 	int mp_num;	/* Mport index */
@@ -179,15 +171,15 @@ struct worker {
 	int con_skt_valid;
 	int msg_size;  /* Minimum 20 bytes for CM messaging!!! */
 	uint16_t sock_num; /* RIO CM socket to connect to */
-	void *sock_tx_buf; 
-	void *sock_rx_buf; 
+	rapidio_mport_socket_msg *sock_tx_buf;
+	rapidio_mport_socket_msg *sock_rx_buf;
 
 	uint64_t perf_msg_cnt; /* Messages read/written */
 	uint64_t perf_byte_cnt; /* bytes read/written */
 	struct timespec st_time; /* Start of the run, for throughput */
 	struct timespec end_time; /* End of the run, for throughput*/
 
-	uint64_t perf_iter_cnt; /* Number of repititions */
+	uint64_t perf_iter_cnt; /* Number of repetitions */
 	struct timespec iter_st_time; /* Start of the iteration, latency */
 	struct timespec iter_end_time; /* End of the iteration, latency */
 	struct timespec tot_iter_time; /* Total time for all iterations */

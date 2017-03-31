@@ -33,18 +33,22 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME:=mport
-TARGETS:=lib$(NAME).a lib$(NAME).so
+TARGETS:=lib$(NAME).a
 SAMPLE_TARGETS:=$(patsubst samples/%.c,%,$(wildcard samples/*.c))
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 SAMPLE_OBJECTS:=$(patsubst samples/%.c,samples/%.o,$(wildcard samples/*.c))
 
+INC=-I$(KDIR) -I$(RIODIR)
+INC+=-I$(FMDDIR)/librio/inc
+
 0?=.
 CXXFLAGS+=-D$(DEBUG_CTL)
-LINK_FLAGS+= -rdynamic -shared -Wl,-soname,lib$(NAME).so.$(SOVER)
-LDFLAGS+=-L. -L$(COMMONLIB) $(LIBS_RPATH) -l$(NAME)
-INC=-I$(KDIR) -I$(RIODIR)
-INC+=-I$(FMDDIR)/libdid/inc -I$(FMDDIR)/libct/inc -I$(FMDDIR)/librio_switch/inc
+
+LDFLAGS_STATIC+=-L. -L$(COMMONLIB) -l$(NAME)
+LDFLAGS_STATIC+=-lcli -ltime_utils
+LDFLAGS_DYNAMIC+=-lpthread
+
 
 .PHONY: all clean samples
 
@@ -56,25 +60,25 @@ samples: $(SAMPLE_TARGETS)
 	@echo ---------- Building $@
 	$(AR) rcs $@ $^
 
-%.so: $(OBJECTS)
-	@echo ---------- Building $@
-	$(CXX) $(CXXFLAGS) -o $@.$(SOVER) $(OBJECTS) $(LINK_FLAGS)
-	@ln -s $@.$(SOVER) $@ &>/dev/null
-
 src/%.o: src/%.c
 	@echo ---------- Building $@
-	$(CXX) -c $(CXXFLAGS) $(INC) $< -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@ \
+	$(INC)
 
 samples/%.o: samples/%.c
 	@echo ---------- Building $@
-	$(CXX) -c $(CXXFLAGS) $(INC) $< -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@ \
+	$(INC)
 
 $(0)/%: $(0)/samples/%.o
 	@echo ---------- Building $@
-	$(CXX) -o $@ $< $(LDFLAGS) \
-	-lcli -ltime_utils -lpthread
+	$(CXX) -o $@ $< \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...
-	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(SAMPLE_TARGETS) $(OBJECTS) $(SAMPLE_OBJECTS) inc/*~ src/*~ *~
+	rm -f $(TARGETS) $(OBJECTS) \
+	$(SAMPLE_TARGETS) $(SAMPLE_OBJECTS) \
+	inc/*~ src/*~ *~
 

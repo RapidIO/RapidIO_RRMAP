@@ -50,24 +50,24 @@
 #include <stdint.h> /* For size_t */
 #include <unistd.h>
 #include <fcntl.h>
-#include <rapidio_mport_dma.h>
 #include <sys/ioctl.h>
 
+#include "rio_route.h"
 #include "tok_parse.h"
-#include <rapidio_mport_mgmt.h>
-#include <rapidio_mport_sock.h>
+#include "rapidio_mport_dma.h"
+#include "rapidio_mport_mgmt.h"
+#include "rapidio_mport_sock.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
 /// @cond
 struct args {
-	uint32_t mport_id;	// local mport ID
-	uint32_t remote_destid;	// RapidIO device destination ID
-	uint16_t remote_channel;// remote channel number
-	uint32_t repeat;	// number of repetitions
+	uint32_t mport_id;		// local mport ID
+	did_val_t remote_did_val;	// RapidIO device destination ID
+	uint16_t remote_channel;	// remote channel number
+	uint32_t repeat;		// number of repetitions
 };
 /// @endcond
 
@@ -89,15 +89,16 @@ static void usage(char *program)
  */
 void show_rio_devs(void)
 {
-	uint32_t *mport_list = NULL;
-	uint32_t *ep_list = NULL;
-	uint32_t *list_ptr;
+	mport_list_t *mport_list = NULL;
+	mport_list_t *list_ptr;
+	uint8_t number_of_mports = RIO_MAX_MPORTS;
+	uint8_t mport_id;
+
+	did_val_t *ep_list = NULL;
 	uint32_t number_of_eps = 0;
-	uint8_t  number_of_mports = RIO_MAX_MPORTS;
-	uint32_t ep = 0;
+	uint32_t ep;
+	int ret;
 	int i;
-	int mport_id;
-	int ret = 0;
 
 	/** - request from driver list of available local mport devices */
 	ret = riomp_mgmt_get_mport_list(&mport_list, &number_of_mports);
@@ -109,51 +110,54 @@ void show_rio_devs(void)
 	printf("\nAvailable %d local mport(s):\n", number_of_mports);
 	if (number_of_mports > RIO_MAX_MPORTS) {
 		printf("WARNING: Only %d out of %d have been retrieved\n",
-				RIO_MAX_MPORTS, number_of_mports);
+		RIO_MAX_MPORTS, number_of_mports);
 	}
 
 	/** - for each local mport display list of remote RapidIO devices */
 	list_ptr = mport_list;
 	for (i = 0; i < number_of_mports; i++, list_ptr++) {
 		mport_id = *list_ptr >> 16;
-		printf("+++ mport_id: %u dest_id: %u\n",
-				mport_id, *list_ptr & 0xffff);
+		printf("+++ mport_id: %u dest_id: %u\n", mport_id,
+				*list_ptr & 0xffff);
 
 		/* Display EPs for this MPORT */
 
-		ret = riomp_mgmt_get_ep_list(mport_id, &ep_list, &number_of_eps);
+		ret = riomp_mgmt_get_ep_list(mport_id, &ep_list,
+				&number_of_eps);
 		if (ret) {
 			printf("ERR: riodp_ep_get_list() ERR %d\n", ret);
 			break;
 		}
 
 		printf("\t%u Endpoints (dest_ID): ", number_of_eps);
-		for (ep = 0; ep < number_of_eps; ep++)
+		for (ep = 0; ep < number_of_eps; ep++) {
 			printf("%u ", *(ep_list + ep));
+		}
 		printf("\n");
 
 		ret = riomp_mgmt_free_ep_list(&ep_list);
-		if (ret)
+		if (ret) {
 			printf("ERR: riodp_ep_free_list() ERR %d\n", ret);
-
+		}
 	}
 
 	printf("\n");
 
 	ret = riomp_mgmt_free_mport_list(&mport_list);
-	if (ret)
+	if (ret) {
 		printf("ERR: riodp_ep_free_list() ERR %d\n", ret);
+	}
 }
 
 static struct timespec timediff(struct timespec start, struct timespec end)
 {
 	struct timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	if ((end.tv_nsec - start.tv_nsec) < 0) {
+		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+		temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
 	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+		temp.tv_sec = end.tv_sec - start.tv_sec;
+		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
 	}
 	return temp;
 }
@@ -174,13 +178,13 @@ static struct timespec timediff(struct timespec start, struct timespec end)
  */
 int main(int argc, char** argv)
 {
-	int ret = 0;
-	uint32_t ep = 0;
+	int ret;
+	uint32_t ep;
 	uint32_t number_of_eps = 0;
-	uint32_t *ep_list = NULL;
+	did_val_t *ep_list = NULL;
 	int ep_found = 0;
-	void *msg_rx = NULL; 
-	void *msg_tx = NULL;
+	rapidio_mport_socket_msg *msg_rx = NULL;
+	rapidio_mport_socket_msg *msg_tx = NULL;
 	struct args arg;
 	riomp_mailbox_t mailbox;
 	riomp_sock_t socket = NULL;
@@ -204,10 +208,11 @@ int main(int argc, char** argv)
 		printf(TOK_ERR_MPORT_MSG_FMT);
 		exit(EXIT_FAILURE);
 	}
-	if (tok_parse_did(argv[2], &arg.remote_destid, 0)) {
+	if (tok_parse_did(argv[2], &arg.remote_did_val, 0)) {
 		printf(TOK_ERR_DID_MSG_FMT);
 		exit(EXIT_FAILURE);
 	}
+
 	if (tok_parse_socket(argv[3], &arg.remote_channel, 0)) {
 		printf(TOK_ERR_SOCKET_MSG_FMT, "Remote channel");
 		exit(EXIT_FAILURE);
@@ -227,20 +232,20 @@ int main(int argc, char** argv)
 	}
 
 	for (ep = 0; ep < number_of_eps; ep++) {
-		if (ep_list[ep] == arg.remote_destid) {
+		if (ep_list[ep] == arg.remote_did_val) {
 			ep_found = 1;
 		}
 	}
 
 	ret = riomp_mgmt_free_ep_list(&ep_list);
 	if (ret) {
-		printf("ERROR: riodp_ep_free_list error: %d\n",	ret);
+		printf("ERROR: riodp_ep_free_list error: %d\n", ret);
 		exit(1);
 	}
 
 	if (!ep_found) {
 		printf("CM_CLIENT(%d) invalid remote destID %d\n",
-			(int)getpid(), arg.remote_destid);
+				(int)getpid(), arg.remote_did_val);
 		exit(1);
 	}
 
@@ -259,10 +264,12 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	ret = riomp_sock_connect(socket, arg.remote_destid, arg.remote_channel);
+	ret = riomp_sock_connect(socket, arg.remote_did_val, arg.remote_channel,
+				NULL);
+
 	if (ret) {
 		if (ret == EADDRINUSE) {
-			printf("riomp_sock_connect: Requested channel already in use, reusing...\n");
+			printf( "Requested channel was in use, reusing...\n");
 		} else {
 			printf("riomp_sock_connect error: %d\n", ret);
 			goto out;
@@ -275,9 +282,10 @@ int main(int argc, char** argv)
 		goto out;
 	}
 
-	msg_rx = malloc(0x1000);
+	msg_rx = (rapidio_mport_socket_msg *) malloc(sizeof(rapidio_mport_socket_msg));
 	if (msg_rx == NULL) {
-		printf("CM_CLIENT(%d): error allocating rx buffer\n", (int)getpid());
+		printf("CM_CLIENT(%d): error allocating rx buffer\n",
+				(int)getpid());
 		riomp_sock_release_send_buffer(socket, msg_tx);
 		goto out;
 	}
@@ -285,33 +293,37 @@ int main(int argc, char** argv)
 	clock_gettime(CLOCK_MONOTONIC, &starttime);
 
 	for (i = 1; i <= arg.repeat; i++) {
-		/* usleep(200 * 1000); */
-		/** - Place message into buffer with space reserved for msg_header */
-		sprintf((char *)((char *)msg_tx + 20), "%d:%d\n", i, (int)getpid());
+		/** - Place message into buffer */
+		snprintf((char *)msg_tx->msg.payload,
+				sizeof(msg_tx->msg.payload), "%d:%d\n", i,
+				(int)getpid());
 
 		/** - Send message to the destination */
-		ret = riomp_sock_send(socket, msg_tx, 0x1000);
+		ret = riomp_sock_send(socket, msg_tx,
+			sizeof(*msg_tx), NULL);
 		if (ret) {
 			printf("CM_CLIENT(%d): riomp_sock_send() ERR %d\n",
-				(int)getpid(), ret);
+					(int)getpid(), ret);
 			break;
 		}
 
 		/** - Get echo response from the server (blocking call, no timeout) */
-		ret = riomp_sock_receive(socket, &msg_rx, 0x1000, 0);
+		ret = riomp_sock_receive(socket, &msg_rx, 0, NULL);
 		if (ret) {
-			printf("CM_CLIENT(%d): riomp_sock_receive() ERR %d on roundtrip %d\n",
-				(int)getpid(), ret, i);
+			printf(
+					"CM_CLIENT(%d): riomp_sock_receive() ERR %d on roundtrip %d\n",
+					(int)getpid(), ret, i);
 			break;
 		}
 
-		if (strcmp((char *)msg_tx + 20, (char *)msg_rx + 20)) {
-			printf("CM_CLIENT(%d): MSG TRANSFER ERROR: data corruption detected @ %d\n",
-				(int)getpid(), i);
-			printf("CM_CLIENT(%d): MSG OUT: %s\n",
-				(int)getpid(), (char *)msg_tx + 20);
-			printf("CM_CLIENT(%d): MSG IN: %s\n",
-				(int)getpid(), (char *)msg_rx + 20);
+		if (strcmp((char *)msg_tx->msg.payload, (char *)msg_rx->msg.payload)) {
+			printf(
+					"CM_CLIENT(%d): MSG TRANSFER ERROR: data corruption detected @ %d\n",
+					(int)getpid(), i);
+			printf("CM_CLIENT(%d): MSG OUT: %s\n", (int)getpid(),
+					(char *)msg_tx->msg.payload);
+			printf("CM_CLIENT(%d): MSG IN: %s\n", (int)getpid(),
+					(char *)msg_rx->msg.payload);
 			ret = -1;
 			break;
 		}
@@ -324,24 +336,20 @@ int main(int argc, char** argv)
 	clock_gettime(CLOCK_MONOTONIC, &endtime);
 
 	if (ret) {
-		printf("CM_CLIENT(%d) ERROR.\n",
-			(int)getpid());
+		printf("CM_CLIENT(%d) ERROR.\n", (int)getpid());
 	} else {
-		printf("CM_CLIENT(%d) Test finished.\n",
-			(int)getpid());
+		printf("CM_CLIENT(%d) Test finished.\n", (int)getpid());
 	}
 
 	/* getchar(); */
-	time 	  = timediff(starttime,endtime);
-	totaltime = ((double) time.tv_sec + (time.tv_nsec / 1000000000.0));
-	mean	  = totaltime/arg.repeat * 1000.0; /* mean in us */
+	time = timediff(starttime, endtime);
+	totaltime = ((double)time.tv_sec + (time.tv_nsec / 1000000000.0));
+	mean = totaltime / arg.repeat * 1000.0; /* mean in us */
 
 	printf("Total time:\t\t\t\t%4f s\n"
-	       "Mean time per message roundtrip:\t%4f us\n"
-	       "Data throughput:\t\t\t\%4f MB/s\n",
-	       totaltime,
-	       mean,
-	       ((4096*i)/totaltime)/(1024*1024));
+			"Mean time per message roundtrip:\t%4f us\n"
+			"Data throughput:\t\t\t%4f MB/s\n", totaltime, mean,
+			((4096 * i) / totaltime) / (1024 * 1024));
 
 out:
 	/** - Close messaging channel */

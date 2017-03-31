@@ -1,35 +1,35 @@
 /*
-****************************************************************************
-Copyright (c) 2016, Integrated Device Technology Inc.
-Copyright (c) 2016, RapidIO Trade Association
-All rights reserved.
+ ****************************************************************************
+ Copyright (c) 2016, Integrated Device Technology Inc.
+ Copyright (c) 2016, RapidIO Trade Association
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without modification,
+ are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*************************************************************************
-*/
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *************************************************************************
+ */
 
 #include <stdio.h>
 #include <string.h>
@@ -45,7 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cfg.h"
 #include "liblist.h"
 #include "liblog.h"
-#include "IDT_Tsi721.h"
+#include "Tsi721.h"
 #include "fmd_state.h"
 #include "fmd_errmsg.h"
 
@@ -63,7 +63,8 @@ int fmd_traverse_network(riocp_pe_handle mport_pe, struct cfg_dev *c_dev)
 	return fmd_traverse_network_from_pe_port(mport_pe, RIO_ANY_PORT, c_dev);
 }
 
-int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, struct cfg_dev *c_dev)
+int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num,
+		struct cfg_dev *c_dev)
 {
 	struct l_head_t sw_list;
 
@@ -95,8 +96,8 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 	do {
 		for (pnum = port_st; pnum < port_cnt; pnum++) {
 			new_pe = NULL;
-		
-			if(cfg_get_conn_dev(curr_pe->comptag, pnum, &conn_dev,
+
+			if (cfg_get_conn_dev(curr_pe->comptag, pnum, &conn_dev,
 					&conn_pt)) {
 				HIGH("PE 0x%0x Port %d NO CONFIG\n",
 						curr_pe->comptag, pnum);
@@ -111,27 +112,31 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 				no_cfg->curr_pe = curr_pe;
 				no_cfg->pnum = pnum;
 				l_push_tail(&no_cfg_list, (void *)no_cfg);
-
+				//@sonar:off - Dynamically allocated memory should be released
 				continue;
+				//@sonar:on
 			}
 
-			rc = riocp_pe_probe(curr_pe, pnum, &new_pe, &conn_dev.ct,
-					(char *)conn_dev.name, true);
+			rc = riocp_pe_probe(curr_pe, pnum, &new_pe,
+					&conn_dev.ct, (char *)conn_dev.name,
+					true);
 
 			if (rc) {
 				if ((-ENODEV != rc) && (-EIO != rc)) {
 					HIGH("PE 0x%0x Port %d probe failed %d",
-						curr_pe->comptag, pnum, rc);
+							curr_pe->comptag, pnum,
+							rc);
 					goto fail;
 				}
 				HIGH("PE 0x%x Port %d NO DEVICE, expected %x\n",
-					curr_pe->comptag, pnum, conn_dev.ct);
+						curr_pe->comptag, pnum,
+						conn_dev.ct);
 				continue;
 			}
 
 			if (NULL == new_pe) {
 				HIGH("PE 0x%x Port %d ALREADY CONNECTED\n",
-					curr_pe->comptag, pnum);
+						curr_pe->comptag, pnum);
 				continue;
 			}
 
@@ -142,14 +147,17 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 			}
 
 			if (comptag != conn_dev.ct) {
-				DBG("Probed ep ct 0x%x != 0x%x config ct port %d\n",
-					comptag, conn_dev.ct, pnum);
+				DBG(
+						"Probed ep ct 0x%x != 0x%x config ct port %d\n",
+						comptag, conn_dev.ct, pnum);
 				goto fail;
 			}
 
-			HIGH("PE 0x%x Port %d Connected: DEVICE %s CT 0x%x DID 0x%x\n",
-				curr_pe->comptag, pnum, new_pe->sysfs_name,
-				new_pe->comptag, new_pe->destid);
+			HIGH(
+					"PE 0x%x Port %d Connected: DEVICE %s CT 0x%x DID 0x%x\n",
+					curr_pe->comptag, pnum,
+					new_pe->sysfs_name, new_pe->comptag,
+					new_pe->did_reg_val);
 
 			if (RIOCP_PE_IS_SWITCH(new_pe->cap)) {
 				void *pe;
@@ -159,15 +167,15 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 				pe = l_head(&sw_list, &li);
 				while (NULL != pe && !found) {
 					if (((struct riocp_pe *)pe)->comptag
-						== new_pe->comptag) {
-						found = true;	
+							== new_pe->comptag) {
+						found = true;
 						continue;
 					}
 					pe = l_next(&li);
 				}
 				if (!found) {
 					HIGH("Adding PE 0x%08x to search\n",
-						new_pe->comptag);
+							new_pe->comptag);
 					l_push_tail(&sw_list, (void *)new_pe);
 				}
 			}
@@ -178,7 +186,7 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 			rc = cfg_find_dev_by_ct(curr_pe->comptag, &curr_dev);
 			if (rc) {
 				HIGH("cfg_find_dev_by_ct fail, ct 0x%x rc %d",
-					curr_pe->comptag, rc);
+						curr_pe->comptag, rc);
 				goto fail;
 			}
 			port_st = 0;
@@ -193,12 +201,12 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 		int dev_number = 1;
 		ct_t ct = COMPTAG_UNSET;
 		did_t did;
-		char sysfs_name[RIO_MAX_DEVNAME_SZ + 1+1];
-		char sysfs_name_format[strlen(AUTO_NAME_PREFIX)+3];
+		char sysfs_name[RIO_MAX_DEVNAME_SZ + 1 + 1];
+		char sysfs_name_format[strlen(AUTO_NAME_PREFIX) + 3];
 
 		memset(sysfs_name, 0, sizeof(sysfs_name_format));
-		snprintf(sysfs_name_format, sizeof(sysfs_name_format),
-				"%s%s", AUTO_NAME_PREFIX, "%d");
+		snprintf(sysfs_name_format, sizeof(sysfs_name_format), "%s%s",
+				AUTO_NAME_PREFIX, "%d");
 		while (1) {
 			no_cfg = (struct fmd_no_cfg *)l_pop_head(&no_cfg_list);
 			if (NULL == no_cfg) {
@@ -214,7 +222,8 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 				ct_create_all(&ct, &did, dev08_sz);
 				memset(sysfs_name, 0, sizeof(sysfs_name));
 				snprintf(sysfs_name, RIO_MAX_DEVNAME_SZ,
-						sysfs_name_format, dev_number++);
+						sysfs_name_format,
+						dev_number++);
 			}
 
 			new_pe = NULL;
@@ -222,24 +231,25 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 			pnum = no_cfg->pnum;
 			free(no_cfg);
 
-			rc = riocp_pe_probe(curr_pe, pnum, &new_pe, &ct, sysfs_name, false);
+			rc = riocp_pe_probe(curr_pe, pnum, &new_pe, &ct,
+					sysfs_name, false);
 			if (rc) {
 				if ((-ENODEV != rc) && (-EIO != rc)) {
 					HIGH("PE 0x%0x Port %d probe failed %d",
-						curr_pe->comptag, pnum, rc);
+							curr_pe->comptag, pnum,
+							rc);
 					ct_release(ct, did);
-					ct = COMPTAG_UNSET;
 					goto fail;
 				}
 				HIGH("PE 0x%x Port %d NO DEVICE, expected %x\n",
-					curr_pe->comptag, pnum, ct);
+						curr_pe->comptag, pnum, ct);
 				// note re-use of ct (and sysfs_name)
 				continue;
 			}
 
 			if (NULL == new_pe) {
 				HIGH("PE 0x%x Port %d ALREADY CONNECTED\n",
-					curr_pe->comptag, pnum);
+						curr_pe->comptag, pnum);
 				// note re-use of ct (and sysfs_name)
 				continue;
 			}
@@ -248,22 +258,27 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 			if (rc) {
 				HIGH("Get new comptag failed, rc %d\n", rc);
 				ct_release(ct, did);
-				ct = COMPTAG_UNSET;
 				goto fail;
 			}
 
-			if(comptag == ct) {
+			if (comptag == ct) {
 				HIGH("PE 0x%x Port %d Connected: DEVICE %s CT 0x%x DID 0x%x\n",
 					curr_pe->comptag, pnum,
-					new_pe->sysfs_name, new_pe->comptag,
-					new_pe->destid);
+					new_pe->sysfs_name,
+					new_pe->comptag,
+					new_pe->did_reg_val);
 				// create a new ct (and name) next loop
 				ct = COMPTAG_UNSET;
 
 				if (RIOCP_PE_IS_SWITCH(new_pe->cap)) {
 					// explore the other ports of the switch
-					port_cnt = RIOCP_PE_PORT_COUNT(new_pe->cap);
+					port_cnt = RIOCP_PE_PORT_COUNT(
+							new_pe->cap);
 					for (pnum = 0; pnum < port_cnt; pnum++) {
+						//@sonar:off - c:S3584 Allocated memory not released
+						// The only reason the memory is not released, is
+						// that the port will be processed later before the
+						// procedure exits.
 						no_cfg = (struct fmd_no_cfg *)malloc(
 								sizeof(struct fmd_no_cfg));
 						if (NULL == no_cfg) {
@@ -272,7 +287,9 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 						}
 						no_cfg->curr_pe = new_pe;
 						no_cfg->pnum = pnum;
-						l_push_tail(&no_cfg_list, (void *)no_cfg);
+						l_push_tail(&no_cfg_list,
+								(void *)no_cfg);
+						//@sonar:on
 					}
 				}
 			} else {
@@ -280,9 +297,9 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 					comptag, ct, pnum);
 			}
 		}
+
 		if (COMPTAG_UNSET != ct) {
 			ct_release(ct, did);
-			ct = COMPTAG_UNSET;
 		}
 	}
 
@@ -290,6 +307,7 @@ int fmd_traverse_network_from_pe_port(riocp_pe_handle pe, rio_port_t port_num, s
 		free(no_cfg);
 	}
 	return 0;
+
 fail:
 	while ((no_cfg = (struct fmd_no_cfg *)l_pop_head(&no_cfg_list))) {
 		free(no_cfg);
@@ -313,23 +331,25 @@ int fmd_enable_all_endpoints(riocp_pe_handle mp_pe)
 		uint32_t cm_sock = fmd->opts->mast_cm_port;
 
 		if (RIOCP_PE_IS_BRIDGE(pes[i]->cap)) {
-			riocp_pe_maint_write(pes[i], TSI721_RIO_WHITEBOARD,
-								cm_sock);
+			riocp_pe_maint_write(pes[i], TSI721_WHITEBOARD,
+					cm_sock);
 		}
 		riocp_pe_maint_read(pes[i], RIO_HOST_LOCK, &lockval);
 		if (RIO_HOST_LOCK_UNLOCKED != lockval) {
 			riocp_pe_maint_write(pes[i], RIO_HOST_LOCK, lockval);
-		};
+		}
 		if (riocp_enable_pe(pes[i], RIO_ALL_PORTS)) {
 			goto cleanup;
 		}
 	}
 	rc = 0;
+
 cleanup:
 	if (riocp_mport_free_pe_list(&pes)) {
 		goto fail;
 	}
 	return rc;
+
 fail:
 	return -1;
 }

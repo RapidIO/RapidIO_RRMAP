@@ -70,28 +70,29 @@ extern "C" {
 
 int init_message_buffers(struct buffer_info *info)
 {
-	info->msg_buff_size = MAX_MSG_SIZE;
-        info->msg_rx = malloc(MAX_MSG_SIZE); 
-        if (info->msg_rx == NULL){
-                printf("File RX: malloc rx msg failed\n");
+	info->msg_rx = (rapidio_mport_socket_msg *) malloc(
+			sizeof(rapidio_mport_socket_msg));
+	if (info->msg_rx == NULL) {
+		printf("File RX: malloc rx msg failed\n");
 		goto fail;
-        }
+	}
 
-        info->msg_tx = malloc(MAX_MSG_SIZE); 
-        if (info->msg_tx == NULL){
-                printf("File RX: malloc tx msg failed\n");
-                goto fail;
-        }
+	info->msg_tx = (rapidio_mport_socket_msg *) malloc(
+			sizeof(rapidio_mport_socket_msg));
+	if (info->msg_tx == NULL) {
+		printf("File RX: malloc tx msg failed\n");
+		goto fail;
+	}
 
-	info->rxed_msg = (struct fxfr_client_to_svr_msg *)
-		(&(((char *)info->msg_rx)[FXFR_MSG_OFFSET]));
-	info->tx_msg = (struct fxfr_svr_to_client_msg *)
-		(&(((char*)info->msg_tx)[FXFR_MSG_OFFSET]));
+	info->rxed_msg =
+			(struct fxfr_client_to_svr_msg *)info->msg_rx->msg.payload;
+	info->tx_msg =
+			(struct fxfr_svr_to_client_msg *)info->msg_tx->msg.payload;
 
 	return 0;
 fail:
 	return 1;
-};
+}
 
 int process_rxed_msg(struct buffer_info *info, int *abort_flag)
 {
@@ -106,14 +107,14 @@ int process_rxed_msg(struct buffer_info *info, int *abort_flag)
 		if (-1 == info->fd) {
 			*abort_flag = 1;
 			perror("open");
-		};
+		}
 	} else {
 		if (strncmp(info->file_name, info->rxed_msg->rx_file_name,
 			sizeof(info->file_name))) {
 			*abort_flag = 1;
 			printf("Attempt to write to wrong file!!!\n");
-		};
-	};
+		}
+	}
 
 	if (!*abort_flag && info->rxed_msg->bytes_tx_now) {
 		uint64_t offset = info->rxed_msg->rapidio_addr -
@@ -123,28 +124,28 @@ int process_rxed_msg(struct buffer_info *info, int *abort_flag)
 		if (writn != info->rxed_msg->bytes_tx_now) {
 			*abort_flag = 1;
 			printf("Could not write all bytes!!!\n");
-		};
+		}
 		info->bytes_rxed += info->rxed_msg->bytes_tx_now;
-	};
+	}
 
 	if (info->rxed_msg->end_of_file) {
 		close(info->fd);
 		return 1;
-	};
+	}
 
 	return 0;
 fail:
 	return 1;
-};
+}
 				
-int send_server_msg(struct buffer_info *info, int fail_abort, int abort_flag)
+int send_server_msg(struct buffer_info *info, int fail_abort, volatile int *abort_flag)
 { 
 	/* Server sends first message to client */
 
 	info->tx_msg->rapidio_addr = htobe64(info->rio_base);
 	info->tx_msg->rapidio_size = htobe64(info->length);
 	info->tx_msg->tot_bytes_rx = htobe64(info->bytes_rxed);
-	info->tx_msg->fail_abort = htobe64(fail_abort || abort_flag);
+	info->tx_msg->fail_abort = htobe64(fail_abort || *abort_flag);
 		
 	memcpy(info->tx_msg->rx_file_name, 
 		info->file_name, MAX_FILE_NAME);
@@ -164,18 +165,17 @@ int send_server_msg(struct buffer_info *info, int fail_abort, int abort_flag)
 		printf("	fail_abort   = %16lx\n",
 			(long unsigned int)info->tx_msg->fail_abort);
 		printf("	file name    = %s\n",
-					info->tx_msg->rx_file_name);
-	};
+				info->tx_msg->rx_file_name);
+	}
 
 	/* Send a message to the client */
 	return riomp_sock_send(*info->req_skt, 
-			info->msg_tx, info->msg_buff_size);
-};
+			info->msg_tx, sizeof(*info->msg_tx), abort_flag);
+}
 
 int receive_client_msg(struct buffer_info *info)
 {
-	int ret = riomp_sock_receive(*info->req_skt, 
-					&info->msg_rx, info->msg_buff_size, 0);
+	int ret = riomp_sock_receive(*info->req_skt, &info->msg_rx, 0, NULL);
 	if (ret) {
 		printf("File RX: riomp_socket_receive() ERR %d (%d)\n",
 			ret, errno);
@@ -202,12 +202,12 @@ int receive_client_msg(struct buffer_info *info)
 			(long unsigned int)info->rxed_msg->fail_abort);
 		printf("file name    = %s\n",
 			info->rxed_msg->rx_file_name);
-	};
+	}
 
 	return ret;
-};
+}
 
-int rx_file(struct buffer_info *info, int *abort_flag)
+int rx_file(struct buffer_info *info, volatile int *abort_flag)
 {
         int ret = 0;
 	int end_of_file = 0;
@@ -225,7 +225,7 @@ int rx_file(struct buffer_info *info, int *abort_flag)
 
 	while (!*abort_flag && !fail_abort && !done && !end_of_file) {
                 /* Server sends first message to client */
-                ret = send_server_msg(info, fail_abort, *abort_flag);
+                ret = send_server_msg(info, fail_abort, abort_flag);
                 if (ret) {
 			if (info->debug)
                         	printf("File RX: socket_send() ERR %d (%d)\n",
@@ -252,12 +252,12 @@ int rx_file(struct buffer_info *info, int *abort_flag)
         	riomp_sock_release_send_buffer(*info->req_skt, info->msg_tx);
         	ret = riomp_sock_close(info->req_skt);
 		info->req_skt = NULL;
-	};
+	}
 
         if (ret)
                 printf("File RX: riomp_socket_close() ERR %d\n", ret);
 	return ret;
-};
+}
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,8 @@ extern "C" {
  */
 static int riocp_pe_dot_print_node(FILE *file, struct riocp_pe *pe)
 {
-	uint32_t route_destid;
+	did_val_t did_val;
+	did_t did;
 	pe_rt_val route_port;
 	int ret = 0;
 
@@ -37,7 +38,7 @@ static int riocp_pe_dot_print_node(FILE *file, struct riocp_pe *pe)
 	fprintf(file, "[label=\"%s\\nct: 0x%08x", riocp_pe_get_device_name(pe), pe->comptag);
 
 	if (!RIOCP_PE_IS_SWITCH(pe->cap))
-		fprintf(file, "\\nid:0x%02x", pe->destid);
+		fprintf(file, "\\nid:0x%02x", pe->did_reg_val);
 
 	fprintf(file, "\" URL=\"javascript:parent.nodeselect(%08x)\" tooltip=\"", pe->comptag);
 	fprintf(file, "%s %s (0x%08x)&#10;", riocp_pe_get_vendor_name(pe),
@@ -45,14 +46,19 @@ static int riocp_pe_dot_print_node(FILE *file, struct riocp_pe *pe)
 
 	/* Put the switch routes in the tooltip */
 	if (RIOCP_PE_IS_SWITCH(pe->cap)) {
-		for (route_destid = 0; route_destid < 256; route_destid++) {
-			ret = riocp_sw_get_route_entry(pe, 0xff, route_destid, &route_port);
+		for (did_val = 0; did_val < 256; did_val++) {
+			if (did_get(&did, did_val)) {
+				continue;
+			}
+
+			ret = riocp_sw_get_route_entry(pe, 0xff, did, &route_port);
 			if (ret) {
 				RIOCP_ERROR("Could not get route for pe 0x%08x\n", pe->comptag);
 				return ret;
 			}
+
 			if (route_port != 0xff)
-				fprintf(file, "%02x:%u&#10;", route_destid, route_port);
+				fprintf(file, "%02x:%u&#10;", did_val, route_port);
 		}
 	}
 	fprintf(file, "\"];\n");
@@ -152,7 +158,6 @@ int RIOCP_SO_ATTR riocp_pe_dot_dump(const char *filename, riocp_pe_handle mport)
 out:
 	fclose(file);
 	riocp_pe_llist_free(seen);
-	free(seen);
 
 	return ret;
 }

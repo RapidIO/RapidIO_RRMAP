@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 
+#include "rio_misc.h"
 #include "rio_ecosystem.h"
 #include "fmd.h"
 #include "fmd_dev_rw_cli.h"
@@ -44,10 +45,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string_util.h"
 
 #include "rio_standard.h"
-#include "IDT_RXS2448.h"
-#include "IDT_RXS_API.h"
-#include "IDT_RXS_Routing_Table_Config_API.h"
-#include "IDT_Routing_Table_Config_API.h"
+#include "RXS2448.h"
+#include "RapidIO_Routing_Table_API.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,8 +58,8 @@ int CLICountReadCmd(struct cli_env *env, int argc, char **argv)
 	struct mpsw_drv_private_data *priv = NULL;
 	DAR_DEV_INFO_t *dev_h = NULL;
 
-	idt_sc_read_ctrs_in_t sc_in;
-	idt_sc_read_ctrs_out_t sc_out;
+	rio_sc_read_ctrs_in_t sc_in;
+	rio_sc_read_ctrs_out_t sc_out;
 	riocp_pe_handle pe_h = (riocp_pe_handle)(env->h);
 
         if (0) {
@@ -70,7 +69,7 @@ int CLICountReadCmd(struct cli_env *env, int argc, char **argv)
 	if (NULL == pe_h) {
 		LOGMSG(env, "\nNo Device Selected...\n");
 		goto exit;
-	};
+	}
 
 	priv = (struct mpsw_drv_private_data *)(pe_h->private_data);
 	if (NULL == priv) {
@@ -81,17 +80,17 @@ int CLICountReadCmd(struct cli_env *env, int argc, char **argv)
 	dev_h = &priv->dev_h;
 	sc_in.ptl.num_ports = RIO_ALL_PORTS;
 	sc_in.dev_ctrs = &priv->st.sc_dev;
-	rc = idt_sc_read_ctrs(dev_h, &sc_in, &sc_out);
+	rc = rio_sc_read_ctrs(dev_h, &sc_in, &sc_out);
 
 	if (RIO_SUCCESS == rc) {
 		LOGMSG(env,"\nCounters read successfully\n");
 	} else {
-		LOGMSG(env, "\nFAILED: rc: %d imp rc %d\n",
+		LOGMSG(env, "\nFAILED: rc: %d imp rc 0x%x\n",
 							rc, sc_out.imp_rc);
 	}
 exit:
 	return 0;
-};
+}
 
 struct cli_cmd CLICountRead = {
 (char *)"scread",
@@ -110,7 +109,7 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 
         riocp_pe_handle pe_h = (riocp_pe_handle)(env->h);
 	uint32_t val_p, cntr;
-	idt_sc_dev_ctrs_t *dc;
+	rio_sc_dev_ctrs_t *dc;
 	const char *oth_name;
 	bool got_one = false;
 	bool chk_rx_tx = false;
@@ -124,7 +123,7 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
         if (NULL == pe_h) {
                 LOGMSG(env, "\nNo Device Selected...\n");
                 goto exit;
- 	};
+ 	}
 
         priv = (struct mpsw_drv_private_data *)(pe_h->private_data);
 	if (NULL == priv) {
@@ -134,7 +133,7 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 	dev_h = &priv->dev_h;
  	dc = &priv->st.sc_dev;
 	
-	if (idt_sc_other_if_names(dev_h, &oth_name)) {
+	if (rio_sc_other_if_names(dev_h, &oth_name)) {
 		oth_name = "??????";
 	}
 
@@ -182,30 +181,29 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 
 	for (val_p = 0; val_p < dc->valid_p_ctrs; ++val_p) {
 		for (cntr = 0; cntr < dc->p_ctrs[val_p].ctrs_cnt; cntr++) {
-			idt_sc_ctr_val_t *stctr = &dc->p_ctrs[val_p].ctrs[cntr];
+			rio_sc_ctr_val_t *stctr = &dc->p_ctrs[val_p].ctrs[cntr];
 			// Never print counters that are zero
 			if (!stctr->last_inc && !stctr->total) {
 				continue;
 			}
-			if (chk_rx_tx) {
-				if (stctr->tx != sc_tx) {
+
+			if (chk_rx_tx && (stctr->tx != sc_tx)) {
 					continue;
-				};
 			}
-			if (chk_rio_oth) {
-				if (stctr->srio != sc_srio) {
-					continue;
-				};
+
+			if (chk_rio_oth && (stctr->srio != sc_srio)) {
+				continue;
 			}
-			if (chk_flags) {
-				if ((flags & SC_FLAG(stctr->sc)) != flags) {
-					continue;
-				}
+
+			if (chk_flags && ((flags & SC_FLAG(stctr->sc)) != flags)) {
+				continue;
 			}
+
 			if (!got_one) {
 				got_one = true;
 				LOGMSG(env, "\nPt   Counter             Last_Inc   Total\n ");
-			};
+			}
+
 			LOGMSG(env,
 				"\n%2d  %2s %8s %6s 0x%8x 0x%16llx",
 				dc->p_ctrs[val_p].pnum,
@@ -218,12 +216,12 @@ int CLICountDisplayCmd(struct cli_env *env, int argc, char **argv)
 	}
 	if (!got_one) {
 		LOGMSG(env, "\nAll counters are 0 or no counters selected.\n");
-	};
+	}
 
 	LOGMSG(env, "\n");
 exit:
         return 0;
-};
+}
 
 struct cli_cmd CLICountDisplay = {
 (char *)"scdisplay",
@@ -239,19 +237,15 @@ CLICountDisplayCmd,
 ATTR_NONE
 };
 
-int CLICountCfgCmd(struct cli_env *env, int argc, char **argv)
+int CLICountCfgCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 {
         riocp_pe_handle pe_h = (riocp_pe_handle)(env->h);
         struct mpsw_drv_private_data *priv = NULL;
 
-        if (0) {
-           argv[0][0] = argc;
-	}
-
         if (NULL == pe_h) {
                 LOGMSG(env, "\nNo Device Selected...\n");
                 goto exit;
-        };
+        }
 
         priv = (struct mpsw_drv_private_data *)(pe_h->private_data);
 	if (NULL == priv) {
@@ -261,7 +255,7 @@ int CLICountCfgCmd(struct cli_env *env, int argc, char **argv)
 
 exit:
         return 0;
-};
+}
 
 struct cli_cmd CLICountCfg = {
 (char *)"scconfig",
@@ -285,7 +279,7 @@ void fmd_bind_dev_sc_cmds(void)
 
 	add_commands_to_cmd_db(sizeof(sc_cmd_list)/
 			sizeof(struct cli_cmd *), sc_cmd_list);
-};
+}
 
 #ifdef __cplusplus
 }

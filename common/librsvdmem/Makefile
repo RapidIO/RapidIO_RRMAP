@@ -33,34 +33,39 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME:=rsvdmem
-TARGETS:=lib$(NAME).a lib$(NAME).so
-TEST_TARGET:=$(NAME)_test
+TARGETS:=lib$(NAME).a
+TEST_TARGETS:=$(NAME)_test
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
 
 CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
-CXXFLAGS+=-I$(FMDDIR)/librio_switch/inc -I$(FMDDIR)/libdid/inc -I$(FMDDIR)/libct/inc
-LINK_FLAGS+= -rdynamic -shared -Wl,-soname,lib$(NAME).so.$(SOVER)
-LDFLAGS+=-L. -L$(COMMONLIB) $(LIBS_RPATH) -l$(NAME)
+CXXFLAGS+=-I$(FMDDIR)/librio/inc
+
+LDFLAGS_STATIC+=-L. -L$(COMMONLIB) -l$(NAME)
+LDFLAGS_STATIC+=$(TST_LIBS) -lcli
+LDFLAGS_DYNAMIC+=-lpthread
 
 
 .PHONY: all clean
 
 ifdef TEST
-all: $(TARGETS) $(TEST_TARGET)
+all: $(TARGETS) $(TEST_TARGETS)
 else
 all: $(TARGETS)
 endif
 
+runtests: $(TEST_TARGETS)
+	@$(foreach f,$^, \
+		echo ------------ Running $(f); \
+		$(UNIT_TEST_FAIL_POLICY) \
+		./$(f); \
+		echo; \
+	)
+
 %.a: $(OBJECTS)
 	@echo ---------- Building $@
 	$(AR) rcs $@ $^
-
-%.so: $(OBJECTS)
-	@echo ---------- Building $@
-	$(CXX) $(CXXFLAGS) -o $@.$(SOVER) $(OBJECTS) $(LINK_FLAGS)
-	@ln -s $@.$(SOVER) $@ &>/dev/null
 
 src/%.o: src/%.c
 	@echo ---------- Building $@
@@ -68,13 +73,17 @@ src/%.o: src/%.c
 
 test/%.o: test/%.c
 	@echo ---------- Building $@
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@ \
+	$(TST_INCS)
 
-$(TEST_TARGET): $(TEST_OBJECTS)
+$(TEST_TARGETS): $(TEST_OBJECTS)
 	@echo ---------- Building $@
-	$(CXX) -o $@ $< $(LDFLAGS) \
-	-lcli -pthread
+	$(CXX) -o $@ $< \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...
-	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(TEST_TARGET) $(OBJECTS) $(TEST_OBJECTS) inc/*~ src/*~ *~
+	rm -f $(TARGETS) $(OBJECTS) \
+	$(TEST_TARGETS) $(TEST_OBJECTS) \
+	inc/*~ src/*~ test/*~ *~

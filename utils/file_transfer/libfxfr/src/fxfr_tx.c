@@ -56,6 +56,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread.h>
 
 #include "string_util.h"
+#include "rio_route.h"
 #include "rapidio_mport_mgmt.h"
 #include "rapidio_mport_sock.h"
 #include "rapidio_mport_dma.h"
@@ -73,7 +74,7 @@ struct fxfr_tx_state {
 				* 1 - Abort transfer
 				*/
 	uint8_t done; 	/* 0 - Transfer continuing
-			* 1 - Transfer successful completion
+			* 1 - Transfer successfull completion
 			*/
 	uint8_t debug;
 	/* MPORT selection and data */
@@ -84,18 +85,17 @@ struct fxfr_tx_state {
 	riomp_mailbox_t req_mb;
 	riomp_sock_t req_skt;
 	int svr_skt;
-	void *msg_rx;
-	void *msg_tx;
+	rapidio_mport_socket_msg *msg_rx;
+	rapidio_mport_socket_msg *msg_tx;
 	struct fxfr_svr_to_client_msg *rxed_msg;
 	struct fxfr_client_to_svr_msg *tx_msg;
-	int msg_buff_size;
 	/* File name data */
 	char src_name[MAX_FILE_NAME+1];
 	int src_fd;
 	char dest_name[MAX_FILE_NAME+1];
 	uint8_t end_of_file;
 	/* RapidIO target/rx data */
-	uint16_t destID; /* DestID of fxfr server */
+	did_val_t did_val; /* DestID of fxfr server */
 	uint8_t use_kbuf; /* 1 => Use kernel buffers, 0 => use malloc/free */
 	uint64_t buf_h; /* Handle for DMA buffer, if using Kernel Buffs */
 	uint8_t *buffers[MAX_TX_SEGMENTS]; /* Data to DMA to fxfr server */
@@ -149,17 +149,16 @@ void process_msg_from_server(struct fxfr_tx_state *info)
 			info->rx_rapidio_size = 
 				(info->rxed_msg->rapidio_size/MAX_TX_SEGMENTS)
 				& ((2*MAX_TX_BUFF_SIZE) - 0x1000);
-	};
+	}
 
 	return;
 fail:
 	info->fail_abort = 1;
-};
+}
 
 void rx_msg_from_server(struct fxfr_tx_state *info)
 {
-	int ret = riomp_sock_receive(info->req_skt, &info->msg_rx, 
-					info->msg_buff_size, 0);
+	int ret = riomp_sock_receive(info->req_skt, &info->msg_rx, 0, NULL);
 	if (ret) {
 		if (info->tx_msg->end_of_file) {
 			info->done = 1;
@@ -167,10 +166,10 @@ void rx_msg_from_server(struct fxfr_tx_state *info)
 			printf("File TX: riomp_sock_receive() ERR %d (%d)\n",
 				ret, errno);
 			info->fail_abort = 1;
-	       		info->rxed_msg->fail_abort = 1;
-		};
-		goto fail;
-	};
+			info->rxed_msg->fail_abort = 1;
+		}
+		return;
+	}
 
 	info->rxed_msg->rapidio_addr = be64toh(info->rxed_msg->rapidio_addr);
 	info->rxed_msg->rapidio_size = be64toh(info->rxed_msg->rapidio_size);
@@ -188,12 +187,10 @@ void rx_msg_from_server(struct fxfr_tx_state *info)
 		printf("fail_abort   = %16lx\n", 
 			(long unsigned int)info->rxed_msg->fail_abort);
 		printf("file name    = %s\n", info->rxed_msg->rx_file_name);
-	};
+	}
 
 	process_msg_from_server(info);
-fail:
-	return;
-};
+}
 
 void fill_dma_buffer(struct fxfr_tx_state *info, int idx)
 {
@@ -201,7 +198,7 @@ void fill_dma_buffer(struct fxfr_tx_state *info, int idx)
 				info->buffers[idx], info->rx_rapidio_size);
 	if (info->bytes_txed < info->rx_rapidio_size)
 		info->end_of_file = 1;
-};
+}
 
 void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 {
@@ -210,7 +207,7 @@ void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 	if (info->bytes_txed) {
 		if (info->use_kbuf) {
 			rc = riomp_dma_write_d(info->mp_h, 
-				info->destID, 
+				info->did_val,
 				info->rx_rapidio_addr +
 					(idx * info->rx_rapidio_size),
 				info->buf_h,
@@ -221,7 +218,7 @@ void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 				NULL);
 		} else {
 			rc = riomp_dma_write(info->mp_h, 
-				info->destID, 
+				info->did_val,
 				info->rx_rapidio_addr +
 					(idx * info->rx_rapidio_size),
 				info->buffers[idx], 
@@ -229,15 +226,16 @@ void send_dma_buffer(struct fxfr_tx_state *info, int idx)
 				RIO_DIRECTIO_TYPE_NWRITE,
 				RIO_DIRECTIO_TRANSFER_SYNC,
 				NULL);
-		};
-	};
+		}
+	}
+
 	if (rc < 0) {
 		info->fail_abort = 1;
 		info->bytes_txed = 0;
 	} else {
 		info->tot_bytes_txed += info->bytes_txed;
-	};
-};
+	}
+}
 
 void send_transfer_msg(struct fxfr_tx_state *info, int idx)
 {
@@ -272,16 +270,17 @@ void send_transfer_msg(struct fxfr_tx_state *info, int idx)
 			(long unsigned int)info->tx_msg->fail_abort);
 		printf("	file name    = %s\n",
 			info->tx_msg->rx_file_name);
-	};
+	}
 
 	/* Send  a message back to the client */
-	ret = riomp_sock_send(info->req_skt, info->msg_tx, MAX_MSG_SIZE);
+	ret = riomp_sock_send(info->req_skt, info->msg_tx,
+		sizeof(*info->msg_tx), NULL);
 	if (ret) {
 		printf("File TX(%d): riomp_sock_send() ERR %d (%d)\n",
 			(int)getpid(), ret, errno);
 		info->fail_abort = 1;
 	}
-};
+}
 
 void send_msgs_to_server(struct fxfr_tx_state *info, struct timespec *st_time)
 {
@@ -289,7 +288,7 @@ void send_msgs_to_server(struct fxfr_tx_state *info, struct timespec *st_time)
 	       	if (!info->rxed_msg->fail_abort) {
 			info->bytes_txed = 0;
 			send_transfer_msg(info, 0);
-		};
+		}
 	} else {
 		uint64_t diff = info->tot_bytes_txed - info->tot_bytes_rxed;
 		uint64_t max_diff = MAX_TX_SEGMENTS*info->rx_rapidio_size;
@@ -306,9 +305,9 @@ void send_msgs_to_server(struct fxfr_tx_state *info, struct timespec *st_time)
 			diff = info->tot_bytes_txed - info->tot_bytes_rxed;
 			info->next_buff_idx = 
 				(info->next_buff_idx + 1) % MAX_TX_SEGMENTS;
-		};
-	};
-};
+		}
+	}
+}
 
 int init_info_vals(struct fxfr_tx_state *info)
 {	
@@ -330,16 +329,15 @@ int init_info_vals(struct fxfr_tx_state *info)
 	info->msg_tx = NULL;
 	info->rxed_msg = NULL;
 	info->tx_msg = NULL;
-	info->msg_buff_size = 0;
 	/* File name data */
-	bzero(info->src_name, MAX_FILE_NAME);
-	bzero(info->dest_name, MAX_FILE_NAME);
+	memset(info->src_name, 0, MAX_FILE_NAME);
+	memset(info->dest_name, 0, MAX_FILE_NAME);
 	info->src_fd = -1;
 	info->end_of_file = 0;
 	/* RapidIO target/rx data */
 	info->buf_h = 0;
 	info->use_kbuf = 1;
-	info->destID = -1;
+	info->did_val = (did_val_t)(-1);
 	for (i = 0; i < MAX_TX_SEGMENTS; i++) 
 		info->buffers[i] = NULL; 
 	info->next_buff_idx = 0;
@@ -351,7 +349,7 @@ int init_info_vals(struct fxfr_tx_state *info)
 	info->rx_rapidio_size = 0; /* Size of fxfr server window */
 
 	return 0;
-};
+}
 
 int init_file_info(struct fxfr_tx_state *info, char *src_name, char *dst_name)
 {
@@ -364,51 +362,49 @@ int init_file_info(struct fxfr_tx_state *info, char *src_name, char *dst_name)
 		printf("\nFile \"%s\" open read-only failed.\n", 
 			info->src_name);
 		return 1;
-	};
+	}
 
 	return 0;
-};
+}
 
 void cleanup_file_info(struct fxfr_tx_state *info)
 {
 	if (info->src_fd > 0)
 		close(info->src_fd);
-};
+}
 
-int init_message_buffers(struct fxfr_tx_state *info, int buf_size)
+int init_message_buffers(struct fxfr_tx_state *info)
 {
-	info->msg_buff_size = buf_size;
-        info->msg_rx = malloc(info->msg_buff_size); 
-        if (info->msg_rx == NULL) {
-                printf("File TX: malloc rx msg failed\n");
-                return 1;
-        };
+	info->msg_rx = (rapidio_mport_socket_msg *) malloc(sizeof(rapidio_mport_socket_msg));
+	if (info->msg_rx == NULL) {
+		printf("File TX: malloc rx msg failed\n");
+		return 1;
+	}
 
-        info->msg_tx = malloc(info->msg_buff_size); 
-        if (info->msg_tx == NULL) {
-                printf("File TX: malloc tx msg failed\n");
-                return 1;
-        };
+	info->msg_tx = (rapidio_mport_socket_msg *) malloc(sizeof(rapidio_mport_socket_msg));
+	if (info->msg_tx == NULL) {
+		printf("File TX: malloc tx msg failed\n");
+		return 1;
+	}
 
-	info->rxed_msg = (struct fxfr_svr_to_client_msg *)
-		(&(((char *)(info->msg_rx))[FXFR_MSG_OFFSET]));
-	info->tx_msg = (struct fxfr_client_to_svr_msg *)
-		(&(((char *)(info->msg_tx))[FXFR_MSG_OFFSET]));
+	info->rxed_msg =
+			(struct fxfr_svr_to_client_msg *) info->msg_rx->msg.payload;
+	info->tx_msg =
+			(struct fxfr_client_to_svr_msg *) info->msg_tx->msg.payload;
 
 	return 0;
-};
+}
 
 void cleanup_msg_buffers(struct fxfr_tx_state *info)
 {
 	riomp_sock_release_receive_buffer(info->req_skt, info->msg_rx);
 	riomp_sock_release_send_buffer(info->req_skt, info->msg_tx);
-};
+}
 
-int init_server_connect(struct fxfr_tx_state *info, 
-			uint8_t mport_num, uint16_t destID, int svr_skt,
-			uint8_t k_buff)
+int init_server_connect(struct fxfr_tx_state *info, uint8_t mport_num,
+		did_val_t did_val, int svr_skt, uint8_t k_buff)
 {
-        int rc = -1;
+        int rc;
 	int i;
         struct riomp_mgmt_mport_properties qresp;
 
@@ -422,14 +418,14 @@ int init_server_connect(struct fxfr_tx_state *info,
                 printf("\nUnable to create mport handle  for mport %d...\n",
 			info->mport_num);
                 goto fail;
-        };
+        }
 
 	info->mp_h_valid = 1;
 
         if (riomp_mgmt_query(info->mp_h, &qresp)) {
                 printf("\nUnable to query mport %d...\n", info->mport_num);
                 goto fail;
-        };
+        }
 
 	if (info->debug)
         	riomp_mgmt_display_info(&qresp);
@@ -437,7 +433,7 @@ int init_server_connect(struct fxfr_tx_state *info,
         if (!(qresp.flags & RIO_MPORT_DMA)) {
                 printf("\nMport %d has no DMA support...\n", info->mport_num);
                 goto fail;
-        };
+        }
 
         rc = riomp_sock_mbox_create_handle(info->mport_num, 0, &info->req_mb);
         if (rc) {
@@ -451,9 +447,9 @@ int init_server_connect(struct fxfr_tx_state *info,
                 goto fail;
         }
 
-	info->destID = destID;
-        rc = riomp_sock_connect(info->req_skt, info->destID, 
-							info->svr_skt);
+	info->did_val = did_val;
+	rc = riomp_sock_connect(info->req_skt, info->did_val, info->svr_skt,
+			NULL);
         if (rc) {
                 printf("riomp_sock_connect ERR %d\n", rc);
                 goto fail;
@@ -481,8 +477,8 @@ int init_server_connect(struct fxfr_tx_state *info,
 			for (i = 1; i < MAX_TX_SEGMENTS; i++) {
                         	info->buffers[i] = info->buffers[0] +
 					(i * MAX_TX_BUFF_SIZE);
-			};
-		};
+			}
+		}
 	} else {
 		for (i = 0; i < MAX_TX_SEGMENTS; i++) {
 			info->buffers[i] = (uint8_t *)malloc(TOTAL_TX_BUFF_SIZE);
@@ -491,13 +487,13 @@ int init_server_connect(struct fxfr_tx_state *info,
 					i);
                 		goto fail;
 			}
-        	};
-	};
+        	}
+	}
 
 	return 0;
 fail:
 	return 1;
-};
+}
 
 void cleanup_server_connect(struct fxfr_tx_state *info)
 {
@@ -509,37 +505,37 @@ void cleanup_server_connect(struct fxfr_tx_state *info)
 			printf("riomp_dbuf_free() ERR: =%d\n", rc);
 		info->buf_h = 0;
 		info->buffers[0] = NULL;
-	};
+	}
 
 	if (!info->use_kbuf) {
 		for (i = 0; i < MAX_TX_SEGMENTS; i++) {
 			if (NULL != info->buffers[i]) {
 				free(info->buffers[i]);
 				info->buffers[i] = NULL;
-			};
-		};
-	};
+			}
+		}
+	}
 
 	if (info->req_skt) {
         	rc = riomp_sock_close(&info->req_skt);
         	if (rc)
                 	printf("riomp_sock_close() ERR %d\n", rc);
 		info->req_skt = NULL;
-	};
+	}
 
         if (info->req_mb) {
 		rc = riomp_sock_mbox_destroy_handle(&info->req_mb);
         	if (rc)
                 	printf("riomp_mbox_shutdown() ERR: %d\n", rc);
 		info->req_mb = NULL;
-	};
+	}
 
 
 	if (info->mp_h_valid) {
                 riomp_mgmt_mport_destroy_handle(&info->mp_h);
 		info->mp_h_valid = 0;
-	};
-};
+	}
+}
 
 void cleanup_all(struct fxfr_tx_state *info)
 {
@@ -548,9 +544,9 @@ void cleanup_all(struct fxfr_tx_state *info)
 	cleanup_server_connect(info);
 }
 
-int init_info( struct fxfr_tx_state *info, char *src_name, char *dest_name,
-                	uint16_t destID, int svr_skt, uint8_t mport_num,
-			uint8_t debug, uint8_t k_buff)
+int init_info(struct fxfr_tx_state *info, char *src_name, char *dest_name,
+		did_val_t did_val, int svr_skt, uint8_t mport_num,
+		uint8_t debug, uint8_t k_buff)
 {
 	init_info_vals(info);
 	
@@ -559,42 +555,36 @@ int init_info( struct fxfr_tx_state *info, char *src_name, char *dest_name,
 	if (init_file_info(info, src_name, dest_name))
 		goto fail;
 
-	if (init_message_buffers(info, MAX_MSG_SIZE))
+	if (init_message_buffers(info))
 		goto fail;
 
-	if (init_server_connect(info, mport_num, destID, svr_skt, k_buff))
+	if (init_server_connect(info, mport_num, did_val, svr_skt, k_buff))
 		goto fail;
 
 	return 0;
 fail:
 	cleanup_all(info);
 	return 1;
-};
+}
 
 static void srv_sig_handler(int signum)
 {
-        switch(signum) {
-        case SIGTERM:
-                srv_exit = 1;
-                break;
-        case SIGINT:
-                srv_exit = 1;
-                break;
-        case SIGUSR1:
-                srv_exit = 1;
-                break;
+	switch (signum) {
+	case SIGTERM:
+	case SIGINT:
+	case SIGUSR1:
+		srv_exit = 1;
+		break;
 	}
-};
+}
 
-extern int send_file( char *src_file, /* Local source file name */
-                        char *dst_file, /* Requested destination file name */
-                        int destID, /* DestID of fxfr server */
-                        int skt_num, /* Channel # of fxfr server */
-                        int mport_num, /* MPORT index to use */
-                        uint8_t debug, /* MPORT index to use */
-			struct timespec *st_time,
-			uint64_t *bytes_sent,
-			uint8_t k_buff)
+int send_file(char *src_name, /* Local source file name */
+		char *dest_name, /* Requested destination file name */
+		did_val_t did_val, /* DestID of fxfr server */
+		uint16_t skt_num, /* Channel # of fxfr server */
+		uint8_t mport_num, /* MPORT index to use */
+		uint8_t debug, /* MPORT index to use */
+		struct timespec *st_time, uint64_t *bytes_sent, uint8_t k_buff)
 {
 	struct fxfr_tx_state info;
 
@@ -604,7 +594,7 @@ extern int send_file( char *src_file, /* Local source file name */
         signal(SIGUSR1, srv_sig_handler);
 
 	/* Confirm local file, connectivity to remote mport/socket etc. */
-	if (init_info(&info, src_file, dst_file, destID, skt_num, 
+	if (init_info(&info, src_name, dest_name, did_val, skt_num,
 			mport_num, debug, k_buff))
 		return -errno;
 
@@ -612,13 +602,13 @@ extern int send_file( char *src_file, /* Local source file name */
 		rx_msg_from_server(&info);
 		send_msgs_to_server(&info, st_time);
 		st_time = NULL;
-	};
+	}
 
 	*bytes_sent = info.tot_bytes_txed;
 	cleanup_all(&info);
 
 	return info.fail_abort;
-};
+}
 
 #ifdef __cplusplus
 }

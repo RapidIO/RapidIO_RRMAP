@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __CFG_PRIVATE_H__
+#define __CFG_PRIVATE_H__
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -55,13 +58,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <netinet/tcp.h>
 #include <pthread.h>
 #include "ct.h"
-#include "IDT_Routing_Table_Config_API.h"
-#include "IDT_Port_Config_API.h"
+#include "RapidIO_Routing_Table_API.h"
+#include "RapidIO_Port_Config_API.h"
 #include "riocp_pe.h"
 #include "fmd_dd.h"
-
-#ifndef _CFG_PRIVATE_H_
-#define _CFG_PRIVATE_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -106,9 +106,9 @@ struct int_mport_info {
 #define CFG_SLAVE -1
 
 struct int_cfg_rapidio {
-	idt_pc_pw_t max_pw;
-	idt_pc_pw_t op_pw;
-	idt_pc_ls_t ls;
+	rio_pc_pw_t max_pw;
+	rio_pc_pw_t op_pw;
+	rio_pc_ls_t ls;
 	int idle2; /* 0 for idle1, 1 for idle2 */
 	int em; /* 0 for no error management, 1 to enable error management */
 };
@@ -125,9 +125,7 @@ struct int_cfg_ep_port {
 
 struct int_cfg_ep {
 	int valid;
-	riocp_pe_handle ep_h;
 	char *name;
-	char *dev_type;
 	int port_cnt;
 	struct int_cfg_ep_port ports[CFG_MAX_EP_PORT];
 };
@@ -138,24 +136,23 @@ struct int_cfg_sw_port {
 	struct int_cfg_rapidio rio;
 	struct int_cfg_conn *conn;
 	int conn_end; /* index of *conn for this switch */
+	// One routing table for each devID size
 	bool rt_valid[CFG_DEVID_MAX];
-	idt_rt_state_t rt[CFG_DEVID_MAX];
+	rio_rt_state_t rt[CFG_DEVID_MAX];
 };
 
 struct int_cfg_sw {
 	int valid;
-	riocp_pe_handle sw_h;
 	char *name;
 	char *dev_type;
+	did_val_t did_val;
 	uint32_t did_sz;
-	uint32_t did;
 	hc_t hc;
 	ct_t ct;
-	uint32_t traversed;
 	struct int_cfg_sw_port ports[CFG_MAX_SW_PORT];
 	// One routing table for each devID size
 	bool rt_valid[CFG_DEVID_MAX]; 
-	idt_rt_state_t rt[CFG_DEVID_MAX]; 
+	rio_rt_state_t rt[CFG_DEVID_MAX];
 };
 
 struct int_cfg_conn_pe {
@@ -176,11 +173,11 @@ struct int_cfg_parms {
 	char *dd_mtx_fn;
 	char *dd_fn;
 	int init_err;
-	int mast_idx;		/* Idx of the mport_info that is master */
+	int mast_idx;	/* Idx of the mport_info that is master */
 	uint32_t max_mport_info_idx; /* Maximum number of mports */
-	struct int_mport_info mport_info[CFG_MAX_MPORTS]; 
-	uint32_t mast_devid_sz;	/* Master CFG location information */
-	uint32_t mast_devid;		/* Master CFG location information */
+	struct int_mport_info mport_info[CFG_MAX_MPORTS];
+	did_val_t mast_did_val;	/* Master CFG location information */
+	uint32_t mast_did_sz;
 	uint32_t mast_cm_port; 	/* Master CFG location information */
 	uint32_t ep_cnt;
 	struct int_cfg_ep eps[CFG_MAX_EP];
@@ -197,4 +194,4 @@ extern struct int_cfg_parms *cfg;
 }
 #endif
 
-#endif /* _CFG_PRIVATE_H_ */
+#endif /* __CFG_PRIVATE_H__ */

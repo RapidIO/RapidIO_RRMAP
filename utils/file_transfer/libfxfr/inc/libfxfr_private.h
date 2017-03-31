@@ -31,10 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-/* Private interface for debugging and server implementation */
+#ifndef __LIBFXFR_PRIVATE_H__
+#define __LIBFXFR_PRIVATE_H__
 
-#ifndef __LIBFXFR_H__
-#define __LIBFXFR_H__
+/**
+ * @file libfxfr_private.h
+ * Private interface for debugging and server implementation
+ */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -45,8 +48,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libfxfr.h"
 #include "rapidio_mport_sock.h"
-
-#define MAX_FILE_NAME 256
 
 #define MAX_TX_SEGMENTS 2
 #define TOTAL_TX_BUFF_SIZE 0x400000
@@ -74,26 +75,25 @@ struct buffer_info {
         pthread_t xfer_thread; /* The thread handling this window */
         sem_t req_avail; /* server kicks this when new request comes in
                               * for this thread to process. */
-        riomp_sock_t *req_skt; /* Socket from successfule connect request */
+        riomp_sock_t *req_skt; /* Socket from successfull connect request */
         char file_name[MAX_FILE_NAME+1]; /* Name of local file */
         int fd; /* File descriptor for received file */
         volatile uint8_t completed; /* 0 - currently processing request.
                            * 1 - processing complete, waiting on request_avail
 			   */
         int rc;       /* return code, 0 means OK, others are stderr codes */
-	void *msg_rx;
-	void *msg_tx;
+	rapidio_mport_socket_msg *msg_rx;
+	rapidio_mport_socket_msg *msg_tx;
 	struct fxfr_client_to_svr_msg *rxed_msg;
 	struct fxfr_svr_to_client_msg *tx_msg;
-	int msg_buff_size;
 	int debug;
 	uint64_t bytes_rxed;
 };
 
-extern int rx_file(struct buffer_info *info, int *abort_flag);
+extern int rx_file(struct buffer_info *info, volatile int *abort_flag);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __LIBFXFR_H__ */
+#endif /* __LIBFXFR_PRIVATE_H__ */

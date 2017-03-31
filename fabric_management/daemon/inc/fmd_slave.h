@@ -1,5 +1,3 @@
-/* Data Structure for connection to FMD in slave mode */
-/* A Slave is an FMD that accepts commands and returns responses */
 /*
 ****************************************************************************
 Copyright (c) 2015, Integrated Device Technology Inc.
@@ -33,17 +31,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_SLAVE_H__
+#define __FMD_SLAVE_H__
+
+/**
+ * @file fmd_slave.h
+ * Data Structure for connection to FMD in slave mode
+ */
+
 #include <semaphore.h>
 #include <pthread.h>
 #include <stdint.h>
 
+#include "rio_route.h"
 #include "rio_ecosystem.h"
 #include "fmd_peer_msg.h"
-#include <rapidio_mport_mgmt.h>
-#include <rapidio_mport_sock.h>
-
-#ifndef __FMD_SLAVE_H__
-#define __FMD_SLAVE_H__
+#include "did.h"
+#include "rapidio_mport_mgmt.h"
+#include "rapidio_mport_sock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,7 +62,7 @@ struct fmd_slave {
 	int slave_must_die;
 
         uint32_t mp_num;
-	uint32_t mast_did;
+	did_t mast_did;
         uint32_t mast_skt_num; /* Socket number to connect to */
         uint32_t mb_valid;
         riomp_mailbox_t mb;
@@ -67,28 +72,26 @@ struct fmd_slave {
         int tx_buff_used;
         int tx_rc;
         union {
-                void *tx_buff;
+                rapidio_mport_socket_msg *tx_buff;
                 struct fmd_slv_to_mast_msg *s2m; /* alias for tx_buff */
         };
         int rx_buff_used;
         int rx_rc;
         union {
-                void *rx_buff;
+                rapidio_mport_socket_msg *rx_buff;
                 struct fmd_mast_to_slv_msg *m2s; /* alias for rx_buff */
         };
 	int m_h_resp_valid;
 	struct fmd_p_hello m_h_rsp;
 };
 
-extern int start_peer_mgmt_slave(uint32_t mast_acc_skt_num, uint32_t mast_did,
-			uint32_t  mp_num, struct fmd_slave *slave);
+int start_peer_mgmt_slave(uint32_t mast_acc_skt_num, did_t mast_did,
+			uint32_t mp_num, struct fmd_slave *slave);
 
-extern void shutdown_slave_mgmt(void);
+int add_device_to_dd(ct_t ct, did_t did, hc_t hc, uint32_t is_mast_pt,
+		uint8_t flag, char *name);
 
-int add_device_to_dd(ct_t ct, uint32_t did, uint32_t did_sz, hc_t hc,
-                uint32_t is_mast_pt, uint8_t flag, char *name);
-
-int del_device_from_dd(ct_t ct, uint32_t did);
+int del_device_from_dd(ct_t ct, did_t did);
 
 void update_master_flags_from_peer(void);
 

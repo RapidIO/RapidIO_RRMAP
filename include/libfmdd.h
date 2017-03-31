@@ -1,4 +1,3 @@
-/* Fabric Management Daemon Device Directory Library for applications */
 /*
 ****************************************************************************
 Copyright (c) 2014, Integrated Device Technology Inc.
@@ -32,8 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#ifndef _LIBFMDD_H_
-#define _LIBFMDD_H_
+#ifndef __LIBFMDD_H__
+#define __LIBFMDD_H__
+
+/**
+ * @file libfmdd.h
+ * Fabric Management Daemon Device Directory Library for applications
+ */
 
 #include <stdio.h>
 #include <string.h>
@@ -41,8 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdarg.h>
 #include <stdint.h>
 
-#include "did.h"
-#include "ct.h"
+#include "rio_route.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,9 +76,9 @@ extern "C" {
  */
 #define FMDD_RDMA_FLAG 0x10
 /**
- * @brief Flag value for Future application 1
+ * @brief Flag value for RRMAP CLI connection to FMD
  */
-#define FMDD_APP1_FLAG 0x20
+#define FMDD_RRMAP_CLI_FLAG 0x20
 /**
  * @brief Flag value for Future application 2
  */
@@ -109,7 +112,7 @@ typedef void *fmdd_h;
  *
  * @param[in] my_name Name of application requesting the handle.
  * @param[in] flag Flag value associated with this application.
- * @return Fabric Management Defice Database handle.
+ * @return Fabric Management Device Database handle.
  * @retval NULL if the call failed.
  *
  * The flag value passed in will be propagated to all other
@@ -145,12 +148,12 @@ uint8_t fmdd_check_ct(fmdd_h h, ct_t ct, uint8_t flag); /* OK if > 0 */
  * @brief Checks what flags are associated with a device ID
  *
  * @param[in] h fmdd_h returned by fmdd_get_handle
- * @param[in] did Device ID identifying the subject device
+ * @param[in] did_val Device ID identifying the subject device
  * @param[in] flag Flag values to check for
  * @return Flag value bitwise-anded with flag parameter
  * @retval 0 means no requested flags were present
  */
-uint8_t fmdd_check_did(fmdd_h h, uint32_t did, uint8_t flag); /* OK if > 0 */
+uint8_t fmdd_check_did(fmdd_h h, did_val_t did_val, uint8_t flag); /* OK if > 0 */
 
 /**
  * @brief Blocks until there is a change in the Device Database
@@ -168,7 +171,7 @@ int fmdd_wait_for_dd_change(fmdd_h h);
  * @param[in,out] did_list Pointer to array of device ID values
  * @return 0 for success, -1 for failure
  */
-int fmdd_get_did_list(fmdd_h h, uint32_t *did_list_sz, uint32_t **did_list);
+int fmdd_get_did_list(fmdd_h h, uint32_t *did_list_sz, did_val_t **did_list);
 
 /**
  * @brief Frees the list of device IDs allocated by fmdd_get_did_list
@@ -177,17 +180,17 @@ int fmdd_get_did_list(fmdd_h h, uint32_t *did_list_sz, uint32_t **did_list);
  * @param[in,out] did_list Updated pointer to array of device ID values
  * @return 0 for success, -1 for failure
  */
-int fmdd_free_did_list(fmdd_h h, uint32_t **did_list);
+int fmdd_free_did_list(fmdd_h h, did_val_t **did_list);
 
 /**
  * @brief If the application includes libcli, bind available fmdd commands
- *
- * @param[in] fmdd_h returned by fmdd_get_handle
  */
-void fmdd_bind_dbg_cmds(void *fmdd_h);
+void fmdd_bind_dbg_cmds(void);
+
+void libfmdd_init(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _LIBFMDD_H_ */
+#endif /* __LIBFMDD_H__ */

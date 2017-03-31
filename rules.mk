@@ -77,7 +77,7 @@ AR    =$(CROSS_COMPILE)ar
 export CC
 export CXX
 
-ifdef KLOKWORK
+ifdef NO_KERNEL_DRVR
 KDIR=$(TOPDIR)/include/test
 RIODIR=$(TOPDIR)/include/test
 else
@@ -107,16 +107,13 @@ ifneq ($(DEBUG_CTL), NDEBUG)
  OPTFLAGS = -ggdb -Og
 endif
 
-SOVER?=0.6
-
 HERE := $(shell pwd)
 
-$(info Building $(HERE) on $(ARCH) release $(SOVER) with optimisations $(OPTFLAGS))
+$(info Building $(HERE) on $(ARCH) with optimisations $(OPTFLAGS))
 
 COMMONDIR=$(TOPDIR)/common
 COMMONINC=$(COMMONDIR)/include
-COMMONLIB=$(COMMONDIR)/libs_so
-COMMONLIBA=$(COMMONDIR)/libs_a
+COMMONLIB=$(COMMONDIR)/libs_a
 
 FMDDIR=$(TOPDIR)/fabric_management
 
@@ -130,9 +127,12 @@ endif
 CFLAGS+=$(STD_FLAGS)
 CXXFLAGS+=$(STD_FLAGS) -std=c++11
 
+LDFLAGS_STATIC?=-Wl,-Bstatic
+LDFLAGS_DYNAMIC?=-Wl,-Bdynamic
+
 ifdef TEST
 TST_LIBS=-lcmocka
 TST_INCS=-I$(COMMONDIR)/libcmocka/inc
 endif
 
-LIBS_RPATH?=-Wl,-rpath=$(COMMONDIR)/libs_so
+UNIT_TEST_FAIL_POLICY?=set -e;

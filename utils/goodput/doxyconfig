@@ -1434,7 +1434,7 @@ TREEVIEW_WIDTH         = 250
 EXT_LINKS_IN_WINDOW    = NO
 
 # Use this tag to change the font size of LaTeX formulas included as images in
-# the HTML documentation. When you change the font size after a successful
+# the HTML documentation. When you change the font size after a successfull
 # doxygen run you need to manually remove any form_*.png images from the HTML
 # output directory to force them to be regenerated.
 # Minimum value: 8, maximum value: 50, default value: 10.

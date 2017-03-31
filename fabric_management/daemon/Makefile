@@ -34,46 +34,47 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME=fmd
-TARGETS=$(NAME)
+TARGET=$(NAME)
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
-LOG_LEVEL ?= 1
+LOG_LEVEL?= 1
 
-LOCAL_LIBRARY_DIR ?= libs_a
-
-LIB_DIRS?= -L$(COMMONLIB) -L../$(LOCAL_LIBRARY_DIR) $(LIBS_RPATH)
-
+CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
 CXXFLAGS+=-I$(KDIR) -I$(RIODIR)
 CXXFLAGS+=-I$(FMDDIR)/inc
+CXXFLAGS+=-I../libdid/inc
+CXXFLAGS+=-I../libct/inc
+CXXFLAGS+=-I../librio/inc
+CXXFLAGS+=-I../libriocp_pe/inc
+CXXFLAGS+=-I../libpe_mpdrv/inc
+CXXFLAGS+=-I../libcfg/inc
 
-.PHONY: all clean fmd
+LDFLAGS_STATIC+=-L$(COMMONLIB) -L../libs_a
+LDFLAGS_STATIC+=-lriocp_pe -lpe_mpdrv -lrio -lcfg -ldid -lct
+LDFLAGS_STATIC+=-ldd -llist -ltime_utils -lcli -llog -lmport
+LDFLAGS_STATIC+=$(TST_LIBS)
+LDFLAGS_DYNAMIC+=-lrt -ldl
 
 
-all: $(TARGETS)
+.PHONY: all clean
+
+
+all: $(TARGET)
 
 src/%.o: src/%.c
 	@echo ---------- Building $@
-	$(CXX) $(CXXFLAGS) -o $@ $< -c \
-	-I../libdid/inc \
-	-I../libct/inc \
-	-I../librio_switch/inc \
-	-I../libriocp_pe/inc \
-	-I../libpe_mpdrv/inc \
-	-I../libcfg/inc \
-	-I../libmport/inc \
-	-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
+	$(CXX) $(CXXFLAGS) -o $@ $< -c
 
 # The Fabric Management Daemon
-fmd: $(OBJECTS)
+$(TARGET): $(OBJECTS)
 	@echo ---------- Building $@
-	$(CXX) -pthread \
-	-o $@ $(OBJECTS) $(LIB_DIRS) \
-	-lcfg -lct -ldid -lpe_mpdrv -lrio_switch -lriocp_pe \
-	-ldd -llist -ltime_utils -lcli -llog -lmport \
-	-lrt -ldl $(TST_LIBS)
+	$(CXX) -o $@ $(OBJECTS) \
+	-pthread \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
-	@echo ---------- Cleaning lib$(NAME)...
-	rm -f $(OBJECTS) \
+	@echo ---------- Cleaning $(NAME)...
+	rm -f $(TARGET) $(OBJECTS) \
 	inc/*~ src/*~ test/*~ *~

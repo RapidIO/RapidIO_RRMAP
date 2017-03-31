@@ -16,7 +16,7 @@ done
 for node in $REVNODES
 do
 	# Kill FMD
-	THE_PID=$(ssh root@"$node" pgrep fmd)
+	THE_PID=$(ssh root@"$node" pgrep -x fmd)
 	echo "Killing -fmd- on $node  FMD  PID=$THE_PID"
 	for proc in $THE_PID
 	do

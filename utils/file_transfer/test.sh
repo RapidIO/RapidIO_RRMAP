@@ -7,10 +7,10 @@ if [ "$#" -lt 4 ]; then
 	echo $'\ntest.sh requires 4 parameters.\n'
 	PRINTHELP=1
 elif [ ! -f $1 ]; then
-	echo $'\nSource file '$1'does not exist.\n'
+	echo $'\nSource file '$1$' does not exist.\n'
 	PRINTHELP=1
 elif [ ! -s $1 ]; then
-	echo $'\nSource file '$1'is empty.\n'
+	echo $'\nSource file '$1$' is empty.\n'
 	PRINTHELP=1
 elif ! [[ $3 =~ $re ]] ; then
 	echo $'\nDestid must be a decimal number.\n'
@@ -39,9 +39,9 @@ for ((i = 1; i<= $MAX_ITER; i++ ))
 do
 	DST_FILE_NAME=${DST_FILE}${i}
 	echo ${SRC_FILE} ${DST_FILE_NAME} ${DESTID}
-./rftp ${SRC_FILE} ${DST_FILE_NAME} ${DESTID}
+	./rftp ${SRC_FILE} ${DST_FILE_NAME} ${DESTID}
 	if [ $? -ne 0 ]; then
-		echo "Iteration " $i " failed, aborting..."
+		echo "Iteration " $i " failed, exiting..."
 		exit
 	fi
 done

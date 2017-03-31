@@ -119,7 +119,7 @@ static int RIOCP_WU riocp_pe_get_efb(struct riocp_pe *pe, uint32_t from, uint32_
  * @param pe Target PE
  * @param[out] efptr Extended feature pointer
  */
-static int riocp_pe_get_efptr_phys(struct riocp_pe *pe, uint32_t *efptr, uint32_t *value)
+static int riocp_pe_get_efptr_phys(struct riocp_pe *pe, uint32_t *efptr, uint32_t *efptr_type, uint32_t *value)
 {
 	int ret;
 	uint32_t _efptr;
@@ -138,14 +138,31 @@ static int riocp_pe_get_efptr_phys(struct riocp_pe *pe, uint32_t *efptr, uint32_
 
 		_efptr_hdr = RIO_EFB_ID(_efptr_hdr);
 		switch (_efptr_hdr) {
-		case RIO_EFB_SER_EP_ID_V13P:
-		case RIO_EFB_SER_EP_REC_ID_V13P:
-		case RIO_EFB_SER_EP_FREE_ID_V13P:
-		case RIO_EFB_SER_EP_ID:
-		case RIO_EFB_SER_EP_REC_ID:
-		case RIO_EFB_SER_EP_FREE_ID:
-		case RIO_EFB_SER_EP_FREC_ID:
+		case RIO_EFB_T_SP_EP:
+		case RIO_EFB_T_SP_EP_SAER:
+		case RIO_EFB_T_SP_NOEP:
+		case RIO_EFB_T_SP_NOEP_SAER:
+		case RIO_EFB_T_SP_EP3:
+		case RIO_EFB_T_SP_EP3_SAER:
+		case RIO_EFB_T_SP_NOEP3:
+		case RIO_EFB_T_SP_NOEP3_SAER:
 			*efptr = _efptr;
+			*efptr_type = _efptr_hdr;
+			return 0;
+		// The next 3 are obsolete identifiers.
+		// Just in case, translate them to standard, supported
+		// identifier values.
+		case RIO_EFB_SER_EP_ID:
+			*efptr = _efptr;
+			*efptr_type = RIO_EFB_T_SP_EP;
+			return 0;
+		case RIO_EFB_SER_EP_REC_ID:
+			*efptr = _efptr;
+			*efptr_type = RIO_EFB_T_SP_EP_SAER;
+			return 0;
+		case RIO_EFB_SER_EP_FREE_ID:
+			*efptr = _efptr;
+			*efptr_type = RIO_EFB_T_SP_NOEP;
 			return 0;
                 case RIO_EFB_T_EMHS:
                         RIOCP_DEBUG("Feature[0x%08x] found with value 0x%08x\n",
@@ -218,7 +235,7 @@ int riocp_pe_read_features(struct riocp_pe *pe)
 	/* Get extended feature pointers when available */
 	if (pe->cap.pe_feat & RIO_PEF_EXT_FEATURES) {
 		
-		ret = riocp_pe_get_efptr_phys(pe, &pe->efptr_phys, &pe->efptr_em);
+		ret = riocp_pe_get_efptr_phys(pe, &pe->efptr_phys, &pe->efptr_phys_type, &pe->efptr_em);
 		if (ret)
 			return ret;
 
@@ -229,6 +246,7 @@ int riocp_pe_read_features(struct riocp_pe *pe)
 		RIOCP_TRACE("PE has extended features\n");
 		RIOCP_TRACE(" - p->efptr      = 0x%04x\n", pe->efptr);
 		RIOCP_TRACE(" - p->efptr_phys = 0x%08x\n", pe->efptr_phys);
+		RIOCP_TRACE(" - p->efptr_type = 0x%08x\n", pe->efptr_phys_type);
 		RIOCP_TRACE(" - p->efptr_em   = 0x%08x\n", pe->efptr_em);
 	}
 
@@ -245,16 +263,19 @@ int riocp_pe_is_port_active(struct riocp_pe *pe, uint32_t port)
 {
 	int ret;
 	uint32_t val = 0;
-	uint32_t efptr = pe->efptr;
+	uint32_t efptr = pe->efptr_phys;
+	uint32_t etype = pe->efptr_phys_type;
+	uint32_t offset;
 
 	RIOCP_TRACE("[pe 0x%08x] Check if port %u is active (efptr: 0x%08x)\n",
 		pe->comptag, port, efptr);
 
 	if (efptr) {
-		ret = riocp_pe_maint_read(pe, efptr + RIO_PORT_N_ERR_STS_CSR(port), &val);
+		offset = RIO_SPX_ERR_STAT(efptr, etype, port);
+		ret = riocp_pe_maint_read(pe, offset, &val);
 		if (ret) {
-			RIOCP_ERROR("Unable to read PORT_N_ERR_STS_CSR(0x%08x) for port %u\n",
-				efptr + RIO_PORT_N_ERR_STS_CSR(port), port);
+			RIOCP_ERROR("Unable to read RIO_SPX_ERR_STAT@0x%08x) for port %u\n",
+				offset, port);
 			return ret;
 		}
 	}
@@ -277,9 +298,10 @@ int riocp_pe_is_discovered(struct riocp_pe *pe)
 	int ret;
 	uint32_t val = 0;
 
-	ret = riocp_pe_maint_read(pe, pe->efptr_phys + RIO_PORT_GEN_CTL_CSR, &val);
-	if (ret)
+	ret = riocp_pe_maint_read(pe, RIO_SP_GEN_CTL(pe->efptr_phys), &val);
+	if (ret) {
 		return ret;
+	}
 
 	return (val & RIO_SP_GEN_CTL_DISC) ? 1 : 0;
 }
@@ -296,9 +318,9 @@ int riocp_pe_set_discovered(struct riocp_pe *pe)
 	uint32_t val;
 	int ret;
 
-	ret = riocp_pe_maint_read(pe, pe->efptr_phys + RIO_PORT_GEN_CTL_CSR, &val);
+	ret = riocp_pe_maint_read(pe, RIO_SP_GEN_CTL(pe->efptr_phys), &val);
 	val |= RIO_SP_GEN_CTL_DISC | RIO_SP_GEN_CTL_MAST_EN;
-	ret += riocp_pe_maint_write(pe, pe->efptr_phys + RIO_PORT_GEN_CTL_CSR, val);
+	ret += riocp_pe_maint_write(pe, RIO_SP_GEN_CTL(pe->efptr_phys), val);
 
 	return ret;
 }
@@ -383,25 +405,30 @@ int riocp_pe_probe_prepare(struct riocp_pe *pe, uint8_t port)
 
 	RIOCP_TRACE("Prepare probe until pe 0x%08x\n", pe->comptag);
 
-	/* Set ANY_ID route to access PE */
+	/* Set DID_ANY_DEV8_ID route to access PE */
 	if (RIOCP_PE_IS_SWITCH(pe->cap)) {
 		struct riocp_pe_port_state_t state;
 
 		ret = riocp_pe_maint_set_anyid_route(pe);
 		if (ret) {
-			RIOCP_ERROR("Could not program anyid route\n");
+			RIOCP_ERROR(
+					"Could not program DID_ANY_DEV8_ID route\n");
 			return -EIO;
 		}
+
 		ret = riocp_drv_get_port_state(pe, port, &state);
 		if (ret) {
 			RIOCP_ERROR("Unable to read port state\n");
 			return -EIO;
 		}
+
 		if (!state.port_ok) {
 			RIOCP_ERROR("Try to probe inactive port\n");
 			return -ENODEV;
 		}
-		ret = riocp_drv_set_route_entry(pe, RIOCP_PE_ANY_PORT, ANY_ID, port);
+
+		ret = riocp_drv_set_route_entry(pe, RIOCP_PE_ANY_PORT,
+				DID_ANY_DEV8_ID, port);
 		if (ret) {
 			RIOCP_ERROR("Could not program route\n");
 			return -EIO;
@@ -430,24 +457,28 @@ int riocp_pe_probe_verify_found(struct riocp_pe *pe, uint8_t port, struct riocp_
 	HC_INCR(hopcount_alt, pe->hopcount);
 
 	RIOCP_TRACE("Probe verify pe: hc: %u, comptag: 0x%08x, port %u\n",
-		pe->hopcount, pe->comptag, port);
-	RIOCP_TRACE("Probe verify pe_alt: hc: %u, d: %u\n",
-		hopcount_alt, ANY_ID);
+			pe->hopcount, pe->comptag, port);
+	RIOCP_TRACE("Probe verify pe_alt: hc: %u, d: %u\n", hopcount_alt,
+			did_get_value(DID_ANY_DEV8_ID));
 	RIOCP_TRACE("Probe verify peer: hc: %u, comptag: 0x%08x\n",
-		peer->hopcount, peer->comptag, port);
+			peer->hopcount, peer->comptag, port);
 
 	/* Reset the component tag for alternative route */
-	ret = riocp_drv_raw_reg_wr(pe, ANY_ID, hopcount_alt, RIO_COMPTAG, 0);
+	ret = riocp_drv_raw_reg_wr(pe, DID_ANY_DEV8_ID, hopcount_alt,
+			RIO_COMPTAG, 0);
 	if (ret) {
-		RIOCP_ERROR("Error reading comptag from d: %u, hc: %u\n", ANY_ID, hopcount_alt);
+		RIOCP_ERROR("Error reading comptag from d: %u, hc: %u\n",
+				did_get_value(DID_ANY_DEV8_ID), hopcount_alt);
 		return -EIO;
 	}
 
 	/* read same comptag again to make sure write has been performed
-		(we read pe comptag from potentially (shorter) different path) */
-	ret = riocp_drv_raw_reg_rd(pe, ANY_ID, hopcount_alt, RIO_COMPTAG, &comptag_alt);
+	 (we read pe comptag from potentially (shorter) different path) */
+	ret = riocp_drv_raw_reg_rd(pe, DID_ANY_DEV8_ID, hopcount_alt,
+			RIO_COMPTAG, &comptag_alt);
 	if (ret) {
-		RIOCP_ERROR("Error reading comptag from d: %u, hc: %u\n", ANY_ID, hopcount_alt);
+		RIOCP_ERROR("Error reading comptag from d: %u, hc: %u\n",
+				did_get_value(DID_ANY_DEV8_ID), hopcount_alt);
 		return -EIO;
 	}
 
@@ -486,7 +517,7 @@ int riocp_pe_probe_verify_found(struct riocp_pe *pe, uint8_t port, struct riocp_
 /**
  * Initialize new peer after probe
  * - Peer is switch
- *   - Set route in global LUT to host destid (mport->destid)
+ *   - Set route in global LUT to host destid (mport->did_reg_val)
  *   - Set switch port enumerated
  * - Set peer discovered bit
  * - Initialize event handling
@@ -494,12 +525,20 @@ int riocp_pe_probe_verify_found(struct riocp_pe *pe, uint8_t port, struct riocp_
  */
 int riocp_pe_probe_initialize_peer(struct riocp_pe *peer)
 {
+	did_t did;
 	int ret;
 
 	/* Set route on new switch to port routing to the host destid */
 	if (RIOCP_PE_IS_SWITCH(peer->cap)) {
-		ret = riocp_drv_set_route_entry(peer, RIOCP_PE_ANY_PORT,
-			peer->mport->destid, RIOCP_PE_SW_PORT(peer->cap));
+		ret = did_get(&did, peer->mport->did_reg_val);
+		if (ret) {
+			RIOCP_ERROR("Unable to get did 0x%08x\n",
+					peer->mport->did_reg_val);
+			return ret;
+		}
+
+		ret = riocp_drv_set_route_entry(peer, RIOCP_PE_ANY_PORT, did,
+				RIOCP_PE_SW_PORT(peer->cap));
 		if (ret) {
 			RIOCP_ERROR("Unable to set route on peer\n");
 			return ret;

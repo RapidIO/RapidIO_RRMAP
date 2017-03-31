@@ -84,29 +84,29 @@ int CLIConfigCmd(struct cli_env *env, int argc, char **argv)
 	if (NULL == pe_h) {
 		LOGMSG(env, "\nNo Device Selected...\n");
 		goto exit;
-	};
+	}
 
 	rc = riocp_pe_handle_get_private(pe_h, (void **)&h);
 	if (rc) {
 		LOGMSG(env, "\nCould not get device info\n");
 		goto exit;
-	};
+	}
 
 	if (NULL == h) {
 		LOGMSG(env, "\nInfo pointer is NULL\n");
 		goto exit;
-	};
+	}
 
 	if (!h->st.pc.num_ports || !h->st.ps.num_ports) {
 		LOGMSG(env, "\nPort information incorrect for device..\n");
 		goto exit;
-	};
+	}
 
 	info_rc = riocp_pe_get_ports(pe_h, pe_port_info);
 	if (info_rc) {
 		LOGMSG(env, "\nGet port information failed: rc %d.", info_rc);
 		goto exit;
-	};
+	}
 
 	LOGMSG(env, "\nPhysLink TO: %8.1f microseconds..",
 			((float )(h->st.pc.lrto)) / 10.0);
@@ -132,33 +132,33 @@ int CLIConfigCmd(struct cli_env *env, int argc, char **argv)
 						pe_port_info[i].peer->pe->comptag,
 						&peer_pe)) {
 					name = (char *)peer_pe->sysfs_name;
-				};
-			};
-		};
+				}
+			}
+		}
 		if (h->st.pc.pc[i].port_lockout) {
 			enables = (char *)"LOCKOUT";
 		} else if (h->st.pc.pc[i].nmtc_xfer_enable) {
 			enables = (char *)"ENABLED";
 		} else {
 			enables = (char *)"MtcONLY";
-		};
+		}
 
 		for (j = 0; j < PW_TO_LANES(h->st.pc.pc[i].pw); j++) {
 			tx_linvert[j] = h->st.pc.pc[i].tx_linvert[j] ?
 					'I' : '-';
 			rx_linvert[j] = h->st.pc.pc[i].rx_linvert[j] ?
 					'I' : '-';
-		};
+		}
 		tx_linvert[4] = rx_linvert[4] = '\0';
 
 		for (j = 0; j < h->st.ps.num_ports; j++) {
 			if (h->st.pc.pc[i].pnum == h->st.ps.ps[j].pnum) {
 				break;
-			};
+			}
 		}
 		if (j == h->st.ps.num_ports) {
 			j = -1;
-		};
+		}
 
 		LOGMSG(env,
 				"%2d %1s %2s %5s/%5s %5s %2s/%2s %2s/%2s %4s %7s %2s %5s %2s %5s %8s.%2d\n",
@@ -178,7 +178,7 @@ int CLIConfigCmd(struct cli_env *env, int argc, char **argv)
 				tx_linvert, h->st.pc.pc[i].rx_lswap ? "Y" : "N",
 				rx_linvert, name, port);
 
-	};
+	}
 exit:
 	return 0;
 }
@@ -211,7 +211,7 @@ int CLIResetCmd(struct cli_env *env, int argc, char **argv)
 	if (NULL == pe_h) {
 		LOGMSG(env, "\nNo Device Selected...\n");
 		goto exit;
-	};
+	}
 
 	if (tok_parse_port_num(argv[0], &tmp, 0)) {
 		LOGMSG(env, "\n");
@@ -221,7 +221,7 @@ int CLIResetCmd(struct cli_env *env, int argc, char **argv)
 	port = (pe_port_t)tmp;
 	if (argc > 1) {
 		reset_lp = true;
-	};
+	}
 
 	/* read data back */
 	rc = riocp_pe_reset_port(pe_h, port, reset_lp);
@@ -256,7 +256,7 @@ void fmd_bind_dev_conf_cmds(void)
 {
 	add_commands_to_cmd_db(sizeof(conf_cmd_list)/
 			sizeof(struct cli_cmd *), conf_cmd_list);
-};
+}
 
 #ifdef __cplusplus
 }

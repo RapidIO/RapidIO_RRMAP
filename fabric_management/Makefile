@@ -44,12 +44,12 @@ level ?= $(LOG_LEVEL)
 export LOCAL_LIBRARY_DIR
 
 CCFLAGS= $(CXXFLAGS) -fPIC -Wall -I. \
-	-I./librio_switch/inc \
+	-I./librio/inc \
 	-I./libriocp_pe/inc -I./librio_maint/inc \
 	-I./libriocp_pe/src \
 	-DRDMA_LL=$(level)
 
-LIB_DEPS= libdid libct libriocp_pe libcli librio_switch libdd libcfg libpe_mpdrv
+LIB_DEPS= libdid libct libriocp_pe libcli librio libdd libcfg libpe_mpdrv
 
 .PHONY: all clean daemon libfmdd $(LIB_DEPS)
 
@@ -68,47 +68,51 @@ libct: FORCE
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libct/libct.a $(LOCAL_LIBRARY_DIR)
 
-libriocp_pe: FORCE
+libriocp_pe: FORCE libpe_mpdrv librio libcfg
 	$(MAKE) all -C libriocp_pe
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libriocp_pe/libriocp_pe.a $(LOCAL_LIBRARY_DIR)
 
-librio_switch: FORCE
-	$(MAKE) all -C librio_switch
+librio: FORCE
+	$(MAKE) all -C librio
 	mkdir -p $(LOCAL_LIBRARY_DIR)
-	cp librio_switch/librio_switch.a $(LOCAL_LIBRARY_DIR)
+	cp librio/librio.a $(LOCAL_LIBRARY_DIR)
 
 libdd: FORCE
 	$(MAKE) all -C libdd
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libdd/libdd.a $(LOCAL_LIBRARY_DIR)
-	mkdir -p $(COMMONLIBA)
-	cp libdd/libdd.a $(COMMONLIBA)
-	
+	mkdir -p $(COMMONLIB)
+	cp libdd/libdd.a $(COMMONLIB)
+
 libcfg: FORCE
 	$(MAKE) all -C libcfg
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libcfg/libcfg.a $(LOCAL_LIBRARY_DIR)
-	
+
 libpe_mpdrv: FORCE
 	$(MAKE) all -C libpe_mpdrv
 	mkdir -p $(LOCAL_LIBRARY_DIR)
 	cp libpe_mpdrv/libpe_mpdrv.a $(LOCAL_LIBRARY_DIR)
-	
+
 libfmdd: FORCE
 	$(MAKE) all -C libfmdd
-	mkdir -p $(COMMONLIBA)
-	cp libfmdd/libfmdd.a $(COMMONLIBA)
-	
+	mkdir -p $(COMMONLIB)
+	cp libfmdd/libfmdd.a $(COMMONLIB)
 
 daemon: $(LIB_DEPS)
 	$(MAKE) all -C daemon
 
 FORCE:
 
+runtests:
+	$(MAKE) runtests -C libcfg
+	$(MAKE) runtests -C libct
+	$(MAKE) runtests -C libdid
+	$(MAKE) runtests -C librio
+
 clean:
-	rm -f fmd *.o *~ inc/*~ *.exe core $(LOCAL_LIBRARY_DIR)/*.so \
-		$(LOCAL_LIBRARY_DIR)/*.a
+	rm -f fmd *.o *~ inc/*~ *.exe core $(LOCAL_LIBRARY_DIR)/*.a
 	$(MAKE) clean -C daemon
 	$(MAKE) clean -C libcfg
 	$(MAKE) clean -C libct
@@ -116,5 +120,5 @@ clean:
 	$(MAKE) clean -C libdid
 	$(MAKE) clean -C libfmdd
 	$(MAKE) clean -C libpe_mpdrv
-	$(MAKE) clean -C librio_switch
+	$(MAKE) clean -C librio
 	$(MAKE) clean -C libriocp_pe

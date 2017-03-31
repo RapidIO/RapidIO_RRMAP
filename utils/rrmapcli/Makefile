@@ -33,24 +33,37 @@
 TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
-LOG_LEVEL ?= 1
+NAME:=rrmapcli
+TARGET:=$(NAME)
 
-LIB_DIRS?= -L$(COMMONLIB)
+LOG_LEVEL ?= 1
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
+CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
+
+LDFLAGS_STATIC+=-L. -L$(COMMONLIB) -L$(FMDDIR)/libs_a
+LDFLAGS_STATIC+=-lfmdd -ldd -llog -ldid -llist -lcli -ltime_utils $(TST_LIBS)
+LDFLAGS_DYNAMIC+= -ldl -lrt
+
+
+.PHONY: all clean
+
+all: $(TARGET)
+
 src/%.o: src/%.c
-	$(CXX) $(CXXFLAGS) -o $@ $< -c \
-	-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
+	@echo ---------- Building $@
+	$(CXX) $(CXXFLAGS) -o $@ $< -c
 
 # The RRMAP CLI utility
-rrmapcli: $(OBJECTS) 
-	@echo ---------- Building RRMAP CLI...
-	$(CXX) -pthread \
-	-o $@ $(OBJECTS) $(LIB_DIRS) $(LIBS_RPATH) \
-	-lcli -lrt -ldl $(TST_LIBS)
-
-all: rrmapcli
+$(TARGET): $(OBJECTS) 
+	@echo ---------- Building $@
+	$(CXX) -o $@ $(OBJECTS) \
+	-pthread \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
-	rm -f $(OBJECTS) inc/*~ src/*~ *~ rrmapcli
+	@echo ---------- Cleaning $(NAME)...
+	rm -f $(TARGET) $(OBJECTS) \
+	inc/*~ src/*~ *~

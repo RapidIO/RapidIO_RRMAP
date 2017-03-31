@@ -50,8 +50,16 @@
 extern "C" {
 #endif
 
-did_sz_t did_ids[RIO_LAST_DEV16];
+did_sz_t did_ids[RIO_LAST_DEV16 + 1];
 uint32_t did_idx = 0;
+
+static void did_init()
+{
+	did_ids[0] = dev08_sz;
+	did_ids[RIO_LAST_DEV8] = dev08_sz;
+	did_ids[RIO_LAST_DEV16] = dev16_sz;
+	did_idx = 1;
+}
 
 /**
  * Convert an integer representation of the device Id, from a config file for example,
@@ -83,8 +91,26 @@ int did_size_from_int(did_sz_t *size, uint32_t asInt)
 	}
 }
 
+int did_size_as_int(did_sz_t size)
+{
+	switch (size) {
+	case dev08_sz:
+		return 0;
+	case dev16_sz:
+		return 1;
+	case dev32_sz:
+		return 2;
+	default:
+		return -1;
+	}
+}
+
 /**
- * Create a device Id for the specified size
+ * Create a device Id for the specified size.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
  * @param[out] did the device Id
  * @param[in] size the device Id size
  * @retval 0 the device Id is valid
@@ -99,9 +125,7 @@ int did_create(did_t *did, did_sz_t size)
 
 	// lazy initialization
 	if (0 == did_idx) {
-		did_ids[0] = dev08_sz;
-		did_ids[255] = dev08_sz;
-		did_idx = 1;
+		did_init();
 	}
 
 	if (NULL == did) {
@@ -151,7 +175,11 @@ found:
 }
 
 /**
- * Create a device Id for the specified value and size
+ * Create a device Id for the specified value and size.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
  * @param[out] did the device Id
  * @param[in] value the device Id value
  * @param[in] size the device Id size
@@ -164,29 +192,27 @@ int did_create_from_data(did_t *did, did_val_t value, did_sz_t size)
 {
 	// lazy initialization
 	if (0 == did_idx) {
-		did_ids[0] = dev08_sz;
-		did_ids[255] = dev08_sz;
-		did_idx = 1;
+		did_init();
 	}
 
 	if (NULL == did) {
 		return -EINVAL;
 	}
 
-	if ((0 == value) || (255 == value)) {
+	if ((0 == value) || (RIO_LAST_DEV8 == value)) {
 		*did = DID_INVALID_ID;
 		return -EINVAL;
 	}
 
 	switch (size) {
 	case dev08_sz:
-		if (value > RIO_LAST_DEV8 - 1) {
+		if (value > RIO_LAST_DEV8) {
 			*did = DID_INVALID_ID;
 			return -EINVAL;
 		}
 		break;
 	case dev16_sz:
-		if (value > RIO_LAST_DEV16 - 1) {
+		if (value >= RIO_LAST_DEV16) {
 			*did = DID_INVALID_ID;
 			return -EINVAL;
 		}
@@ -210,7 +236,11 @@ int did_create_from_data(did_t *did, did_val_t value, did_sz_t size)
 }
 
 /**
- * Release a device Id
+ * Release a device Id.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
  * @param did the device Id
  * @retval 0 the device Id is released
  * @retval -EINVAL the specified device Id is out of range
@@ -219,19 +249,20 @@ int did_create_from_data(did_t *did, did_val_t value, did_sz_t size)
  */
 int did_release(did_t did)
 {
-	did_val_t idx = did.value;
-	if ((0 == idx) || (255 == idx)) {
+	did_val_t value = did.value;
+
+	if ((0 == value) || (RIO_LAST_DEV8 == value)) {
 		return -EINVAL;
 	}
 
 	switch (did.size) {
 	case dev08_sz:
-		if (idx > (RIO_LAST_DEV8 - 1)) {
+		if (value > RIO_LAST_DEV8) {
 			return -EINVAL;
 		}
 		break;
 	case dev16_sz:
-		if (idx > (RIO_LAST_DEV16 - 1)) {
+		if (value >= RIO_LAST_DEV16) {
 			return -EINVAL;
 		}
 		break;
@@ -240,30 +271,80 @@ int did_release(did_t did)
 		return -EPERM;
 	}
 
-	if (invld_sz == did_ids[idx]) {
+	if (invld_sz == did_ids[value]) {
 		return -EKEYEXPIRED;
 	}
 
-	if (did.size != did_ids[idx]) {
-		return -EINVAL;
-	}
-
-	did_ids[idx] = invld_sz;
+	did_ids[value] = invld_sz;
 	return 0;
 }
 
 /**
- * Get an existing device Id for the specified value and size
+ * Get an existing device Id for the specified value and size.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
  * @param[out] did the device Id
  * @param[in] value the device Id value to get
- * @param[in] size the device Id size
  * @retval 0 the device Id exists
  * @retval -EINVAL the specified device Id is out of range
  * @retval -EPERM the operation is not supported
  * @retval -EKEYEXPIRED the specified device Id is not in use
  */
-int did_get(did_t *did, did_val_t value, did_sz_t size)
+int did_get(did_t *did, did_val_t value)
 {
+	// lazy initialization
+	if (0 == did_idx) {
+		did_init();
+	}
+
+	if (NULL == did) {
+		return -EINVAL;
+	}
+
+	if ((0 == value) || (RIO_LAST_DEV8 == value)
+			|| (value >= RIO_LAST_DEV16)) {
+		*did = DID_INVALID_ID;
+		return -EINVAL;
+	}
+
+	// the value is in use for all did sizes
+	if (invld_sz != did_ids[value]) {
+		did->value = value;
+		did->size = did_ids[value];
+		return 0;
+	}
+
+	*did = DID_INVALID_ID;
+	return -EKEYEXPIRED;
+}
+
+/**
+ * Create or get a device Id as transported via messaging between master and slave.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
+ * @param[out] did the device Id
+ * @param[in] value the device Id value
+ * @param[in] size the device Id size
+ * @retval 0 the device Id was created or exists
+ * @retval -EINVAL the specified device Id is out of range
+ * @retval -EPERM the operation is not supported
+ *
+ * Note value and size have must be corrected for network order prior to calling
+ * this function.
+ */
+int did_from_value(did_t *did, uint32_t value, uint32_t size)
+{
+	did_sz_t sz;
+
+	// lazy initialization
+	if (0 == did_idx) {
+		did_init();
+	}
+
 	if (NULL == did) {
 		return -EINVAL;
 	}
@@ -274,17 +355,19 @@ int did_get(did_t *did, did_val_t value, did_sz_t size)
 	}
 
 	switch (size) {
-	case dev08_sz:
-		if (value > (RIO_LAST_DEV8 - 1)) {
+	case 0:
+		if (value > RIO_LAST_DEV8) {
 			*did = DID_INVALID_ID;
 			return -EINVAL;
 		}
+		sz = dev08_sz;
 		break;
-	case dev16_sz:
-		if (value > (RIO_LAST_DEV16 - 1)) {
+	case 1:
+		if (value >= RIO_LAST_DEV16) {
 			*did = DID_INVALID_ID;
 			return -EINVAL;
 		}
+		sz = dev16_sz;
 		break;
 	default:
 		// only 8 and 16 bit DIDs are supported
@@ -292,18 +375,70 @@ int did_get(did_t *did, did_val_t value, did_sz_t size)
 		return -EPERM;
 	}
 
-	if (size == did_ids[value]) {
-		did->value = value;
-		did->size = size;
-		return 0;
+	// the value is in use for all did sizes
+	if (invld_sz == did_ids[value]) {
+		did_ids[value] = sz;
 	}
 
-	*did = DID_INVALID_ID;
-	return -EKEYEXPIRED;
+	did->value = value;
+	did->size = sz;
+	return 0;
 }
 
 /**
- * Check if a device Id is in use
+ * Extract the value and size from an existing device Id for transport via
+ * messaging between master and slave.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
+ * @param[in] did the device Id
+ * @param[out] value the device Id value
+ * @param[out] size the device Id size
+ *
+ * @retval 0 the device Id was correctly parsed
+ * @retval -EPERM the operation is not supported
+ *
+ * Note value and size have must be corrected for network order after calling
+ * this function.
+ */
+int did_to_value(did_t did, uint32_t *value, uint32_t *size)
+{
+	// does not bother to check if the provided did is in use or not
+
+	if ((NULL == value) || (NULL == size)) {
+		if (NULL != value) {
+			*value = 0;
+		}
+		if (NULL != size) {
+			*size = 0;
+		}
+		return -EINVAL;
+	}
+
+	*value = did.value;
+	switch (did.size) {
+	case dev08_sz:
+		*size = 0;
+		break;
+	case dev16_sz:
+		*size = 1;
+		break;
+	default:
+		// only 8 and 16 bit DIDs are supported
+		*value = 0;
+		*size = 0;
+		return -EPERM;
+	}
+	return 0;
+}
+
+/**
+ * Check if a device Id is in use.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
  * @param did the device Id
  * @retval 0 if the device Id is not in use
  * @retval 1 if the device Id is in use
@@ -312,18 +447,20 @@ int did_get(did_t *did, did_val_t value, did_sz_t size)
  */
 int did_not_inuse(did_t did)
 {
-	if ((0 == did.value) || (RIO_LAST_DEV8 == did.value)) {
+	did_val_t value = did.value;
+
+	if ((0 == value) || (RIO_LAST_DEV8 == value)) {
 		return -EINVAL;
 	}
 
 	switch (did.size) {
 	case dev08_sz:
-		if (did.value > (RIO_LAST_DEV8 - 1)) {
+		if (value > RIO_LAST_DEV8) {
 			return -EINVAL;
 		}
 		break;
 	case dev16_sz:
-		if (did.value > (RIO_LAST_DEV16 - 1)) {
+		if (value >= RIO_LAST_DEV16) {
 			return -EINVAL;
 		}
 		break;
@@ -331,7 +468,7 @@ int did_not_inuse(did_t did)
 		// only 8 and 16 bit DIDs are supported
 		return -EPERM;
 	}
-	return (did.size == did_ids[did.value] ? 1 : 0);
+	return (invld_sz != did_ids[value]);
 }
 
 /**
@@ -354,6 +491,22 @@ did_sz_t did_get_size(did_t did)
 	return did.size;
 }
 
+/**
+ * Return if two device Ids are equal.
+ * Note a device Id with a size of dev08 and value XX is equivalent to a device
+ * Id of dev16 of 00XX. Conversely a device Id with a size of dev16 and value
+ * of 00YY is equivalent to a device Id with a size of dev08 and value of YY.
+ *
+ * @param[in] did the device Id
+ * @param[in] other the other device Id
+ * @return true if equal, false otherwise
+ */
+bool did_equal(did_t did, did_t other)
+{
+	// ignore size
+	return (did.value == other.value);
+}
+
 #ifdef UNIT_TESTING
 void did_reset()
 {
@@ -362,23 +515,28 @@ void did_reset()
 }
 
 /**
- * Determine if the provided did is as expected
- *
+ * Determine if the provided did is as expected.
+ * Note that two dids are considered equal if their value is equal, and
+ * their size is not "invalid" (i.e. a did with value 8 and size of 8, 16
+ * or 32 are equal).
  * @param[in] did the did to be tested
  * @param[in] value the expected value
  * @param[in] size the expected size
  *
  * @retval 0 the did is as expected
  * @retval 1 the value is not as expected
- * @retval 2 the size is not as expected
+ * @retval 2 the size is invalid
  */
 
-int did_equal(did_t did, did_val_t value, did_sz_t size)
+int did_match(did_t did, did_val_t value, did_sz_t size)
 {
 	if (value != did.value) {
 		return 1;
 	}
-	if (size != did.size) {
+	if ((invld_sz == size) && (invld_sz == did.size)) {
+		return 0;
+	}
+	if (invld_sz == did.size) {
 		return 2;
 	}
 	return 0;
@@ -395,7 +553,7 @@ int did_equal(did_t did, did_val_t value, did_sz_t size)
  */
 int did_invalid(did_t did)
 {
-	return did_equal(did, 0, invld_sz);
+	return did_match(did, 0, invld_sz);
 }
 #endif
 

@@ -3,12 +3,14 @@
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
+
+#ifndef __RIOCP_PE_PE_H__
+#define __RIOCP_PE_PE_H__
+
 /**
  * @file pe.h
  * RapidIO processing element helper functions
  */
-#ifndef RIOCP_PE_PE_H__
-#define RIOCP_PE_PE_H__
 
 #include <stdint.h>
 
@@ -42,11 +44,6 @@ int RIOCP_WU riocp_pe_add_peer(struct riocp_pe *pe, struct riocp_pe *peer,
 		uint8_t pe_port, uint8_t peer_port);
 int RIOCP_WU riocp_pe_remove_peer(struct riocp_pe *pe, uint8_t port);
 
-int RIOCP_WU riocp_pe_lock_read(struct riocp_pe *mport, uint32_t destid, hc_t hopcount, uint32_t *lock);
-int RIOCP_WU riocp_pe_lock_write(struct riocp_pe *mport, uint32_t destid, hc_t hopcount, uint32_t lock);
-int RIOCP_WU riocp_pe_lock_set(struct riocp_pe *mport, uint32_t destid, hc_t hopcount);
-int RIOCP_WU riocp_pe_lock_clear(struct riocp_pe *mport, uint32_t destid, hc_t hopcount);
-
 int RIOCP_WU riocp_pe_probe_prepare(struct riocp_pe *pe, uint8_t port);
 int RIOCP_WU riocp_pe_probe_verify_found(struct riocp_pe *pe, uint8_t port, struct riocp_pe *peer);
 int RIOCP_WU riocp_pe_probe_initialize_peer(struct riocp_pe *peer);
@@ -55,4 +52,4 @@ int RIOCP_WU riocp_pe_probe_initialize_peer(struct riocp_pe *peer);
 }
 #endif
 
-#endif /* RIOCP_PE_PE_H__ */
+#endif /* __RIOCP_PE_PE_H__ */

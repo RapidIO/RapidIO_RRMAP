@@ -12,12 +12,12 @@ wait 4 d
 wait 5 d
 wait 6 d
 wait 7 d
-t 0 -1 0
+thread 0 -1 0
 wait 0 h
-IBA 0 bytes iba_addr
+IBAlloc 0 bytes iba_addr
 wait 0 r
 wait 0 h
-DIOT 0 did iba_addr acc_size wr
+DIOTxLat 0 did iba_addr acc_size wr
 wait 0 r
 echo DIOT LATENCY acc_size wr TRANSMIT
 sleep wait_time

@@ -1,35 +1,35 @@
 /*
-****************************************************************************
-Copyright (c) 2015, Integrated Device Technology Inc.
-Copyright (c) 2015, RapidIO Trade Association
-All rights reserved.
+ ****************************************************************************
+ Copyright (c) 2015, Integrated Device Technology Inc.
+ Copyright (c) 2015, RapidIO Trade Association
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without modification,
+ are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*************************************************************************
-*/
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *************************************************************************
+ */
 
 /* System includes */
 #include <sys/time.h>
@@ -61,10 +61,10 @@ extern "C" {
 extern unsigned RDMA_LL;
 #endif
 
-unsigned g_level 	= RDMA_LL; /* Default log level from build */
-unsigned g_disp_level 	= RDMA_LL_CRIT; /* Default log level from build */
+unsigned g_level = RDMA_LL; /* Default log level from build */
+unsigned g_disp_level = RDMA_LL_CRIT; /* Default log level from build */
 
-static circ_buf<string,NUM_LOG_LINES>	log_buf;
+static circ_buf<string, NUM_LOG_LINES> log_buf;
 static unsigned circ_buf_en = 0;
 static sem_t log_buf_sem;
 
@@ -83,7 +83,7 @@ int rdma_log_init(const char *log_filename, unsigned circ_buf_en)
 	if (circ_buf_en && (NULL == log_filename)) {
 		log_file = NULL;
 		return 0;
-	};
+	}
 
 	/* Directory name */
 	string filename(DEFAULT_LOG_DIR);
@@ -95,7 +95,7 @@ int rdma_log_init(const char *log_filename, unsigned circ_buf_en)
 		create_dir.insert(0, "mkdir ");
 		if (system(create_dir.c_str()) < 0) {
 			fprintf(stderr, "Failed to create '%s'\n",
-							filename.c_str());
+					filename.c_str());
 			return -ENOENT;
 		}
 	}
@@ -114,9 +114,11 @@ int rdma_log_init(const char *log_filename, unsigned circ_buf_en)
 void rdma_log_close()
 {
 	if (log_file) {
-		fclose(log_file); log_file = NULL;
-	} else
+		fclose(log_file);
+		log_file = NULL;
+	} else {
 		puts("rdma_log_close(): log_file is NULL");
+	}
 } /* rdma_log_close() */
 
 void rdma_log_dump()
@@ -124,55 +126,50 @@ void rdma_log_dump()
 	log_buf.dump();
 } /* rdma_log_dump() */
 
-int rdma_log(unsigned level,
-	     const char *level_str,
-	     const char *file,
-	     int line_num,
-	     const char *func,
-	     const char *format,
-	     ...)
+int rdma_log(unsigned level, const char *level_str, const char *file,
+		int line_num, const char *func, const char *format, ...)
 {
 	char buffer[LOG_LINE_SIZE] = {0};
-	va_list	args;
-	int	n, p;
-	time_t	cur_time;
+	va_list args;
+	int n;
+	int p;
+	time_t cur_time;
 	struct timeval tv;
-	char	asc_time[26] = {0};
+	char asc_time[26] = {0};
 
 	char *oneline_fmt = (char *)"%4s %s.%06ldus tid=%ld %s:%4d %s(): ";
-	
+
 	/* Prefix with level_str, timestamp, filename, line no., and func */
 	time(&cur_time);
 	ctime_r(&cur_time, asc_time);
 	asc_time[strlen(asc_time) - 1] = '\0';
 	gettimeofday(&tv, NULL);
-	n = sprintf(buffer, (const char *)(oneline_fmt),
-		level_str,
-		asc_time,
-		tv.tv_usec,
-		syscall(SYS_gettid),
-		file,
-		line_num,
-		func);
-	
+	n = snprintf(buffer, sizeof(buffer), (const char *)(oneline_fmt),
+			level_str, asc_time, tv.tv_usec, syscall(SYS_gettid),
+			file, line_num, func);
+	buffer[sizeof(buffer) - 1] = '\0';
+
 	/* Handle format and variable arguments */
 	va_start(args, format);
-	p = vsnprintf(buffer + n, sizeof(buffer)-n, format, args);
+	p = vsnprintf(buffer + n, sizeof(buffer) - n, format, args);
 	va_end(args);
 
 	/* Push log line into circular log buffer and log file */
 	string log_line(buffer);
 	sem_wait(&log_buf_sem);
-	if (circ_buf_en)
+	if (circ_buf_en) {
 		log_buf.push_back(log_line);
-	if (log_file) 
+	}
+	if (log_file) {
 		fputs(log_line.c_str(), log_file);
+	}
 	if (level <= g_disp_level) {
 		fprintf(stdout, "%s", log_line.c_str());
-		if ('\n' != buffer[n+p-1])
+		if ('\n' != buffer[n + p - 1]) {
 			fprintf(stdout, "\n");
+		}
 		fflush(stdout);
-	};
+	}
 	sem_post(&log_buf_sem);
 
 	/* Return 0 if there is no error */

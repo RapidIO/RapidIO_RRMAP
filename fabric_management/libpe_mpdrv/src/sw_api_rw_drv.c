@@ -33,100 +33,109 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#include <time.h>
+
+#include "libtime_utils.h"
+#include "rio_misc.h"
+#include "DSF_DB_Private.h"
 #include "pe_mpdrv_private.h"
 #include "riocp_pe_internal.h"
-#include "IDT_DSF_DB_Private.h"
-#include "DAR_Utilities.h"
+#include "RapidIO_Utilities_API.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-uint32_t SRIO_API_ReadRegFunc(DAR_DEV_INFO_t *d_info,
-				uint32_t offset, uint32_t *readdata)
+static int get_acc_p(DAR_DEV_INFO_t *d_info, uint32_t offset,
+		riocp_pe_handle *pe_h, struct mpsw_drv_pe_acc_info **acc_p)
+{
+	riocp_pe_handle mport_pe_h;
+
+	if ((NULL == d_info) || (offset >= 0x01000000)) {
+		goto exit;
+	}
+
+	*pe_h = (riocp_pe_handle)d_info->privateData;
+	if (NULL == d_info->accessInfo) {
+
+		/* Not an MPORT, get MPORT access information */
+		mport_pe_h = (*pe_h)->mport;
+		if (NULL == mport_pe_h) {
+			goto exit;
+		}
+
+		if (NULL == mport_pe_h->minfo) {
+			goto exit;
+		}
+		*acc_p = (struct mpsw_drv_pe_acc_info *)(mport_pe_h->minfo->private_data);
+	} else {
+		*acc_p = (struct mpsw_drv_pe_acc_info *)(d_info->accessInfo);
+	}
+
+	return 0;
+exit:
+	return 1;
+}
+
+uint32_t SRIO_API_ReadRegFunc(DAR_DEV_INFO_t *d_info, uint32_t offset,
+		uint32_t *readdata)
 {
 	uint32_t rc = RIO_ERR_INVALID_PARAMETER;
 	uint32_t x;
-        struct mpsw_drv_pe_acc_info *acc_p;
+	struct mpsw_drv_pe_acc_info *acc_p;
 	riocp_pe_handle pe_h;
 
-	if ((d_info == NULL) || (offset >= 0x01000000))
+	if (get_acc_p(d_info, offset, &pe_h, &acc_p)) {
 		goto exit;
+	}
 
-	pe_h = (riocp_pe_handle)d_info->privateData;
-	if (d_info->accessInfo == NULL) {
-		riocp_pe_handle mport_pe_h;
-		/* Not an MPORT, get MPORT access information */
-		mport_pe_h = pe_h->mport;
-		if (NULL == mport_pe_h)
-			goto exit;
-		if (NULL == mport_pe_h->minfo)
-			goto exit;
-		acc_p = (struct mpsw_drv_pe_acc_info *)
-				(mport_pe_h->minfo->private_data);
-	} else {
-		acc_p = (struct mpsw_drv_pe_acc_info *)(d_info->accessInfo);
-	};
-
-	if (RIOCP_PE_IS_MPORT(pe_h))
-		rc = riomp_mgmt_lcfg_read(acc_p->maint, offset, sizeof(x), &x)?
+	if (RIOCP_PE_IS_MPORT(pe_h)) {
+		rc = riomp_mgmt_lcfg_read(acc_p->maint, offset, sizeof(x), &x) ?
 						RIO_ERR_ACCESS:RIO_SUCCESS;
-	else
-		rc = riomp_mgmt_rcfg_read(acc_p->maint, pe_h->destid,
-			pe_h->hopcount, offset, sizeof(x), &x)?
-				RIO_ERR_ACCESS:RIO_SUCCESS;
-	if (RIO_SUCCESS == rc)
+	} else {
+		rc = riomp_mgmt_rcfg_read(acc_p->maint, pe_h->did_reg_val,
+				pe_h->hopcount, offset, sizeof(x), &x) ?
+				RIO_ERR_ACCESS : RIO_SUCCESS;
+	}
+
+	if (RIO_SUCCESS == rc) {
 		*readdata = x;
+	}
+
 exit:
 	return rc;
-};
+}
 
-uint32_t SRIO_API_WriteRegFunc(DAR_DEV_INFO_t *d_info,
-				uint32_t  offset,
-				uint32_t  writedata)
+uint32_t SRIO_API_WriteRegFunc(DAR_DEV_INFO_t *d_info, uint32_t offset,
+		uint32_t writedata)
 {
 	uint32_t rc = RIO_ERR_INVALID_PARAMETER;
-        struct mpsw_drv_pe_acc_info *acc_p;
+	struct mpsw_drv_pe_acc_info *acc_p;
 	riocp_pe_handle pe_h;
 
-	if ((d_info == NULL) || (offset >= 0x01000000))
+	if (get_acc_p(d_info, offset, &pe_h, &acc_p)) {
 		goto exit;
-
-	pe_h = (riocp_pe_handle)d_info->privateData;
-	if (d_info->accessInfo == NULL) {
-		riocp_pe_handle mport_pe_h;
-		/* Not an MPORT, get MPORT access information */
-		mport_pe_h = pe_h->mport;
-		if (NULL == mport_pe_h)
-			goto exit;
-		if (NULL == mport_pe_h->minfo)
-			goto exit;
-		acc_p = (struct mpsw_drv_pe_acc_info *)
-				(mport_pe_h->minfo->private_data);
-	} else {
-		acc_p = (struct mpsw_drv_pe_acc_info *)(d_info->accessInfo);
-	};
+	}
 
 	if (RIOCP_PE_IS_MPORT(pe_h)) {
 		rc = riomp_mgmt_lcfg_write(acc_p->maint, offset,
 				sizeof(writedata), writedata) ?
-		RIO_ERR_ACCESS : RIO_SUCCESS;
+				RIO_ERR_ACCESS : RIO_SUCCESS;
 	} else {
-		rc = riomp_mgmt_rcfg_write(acc_p->maint, pe_h->destid,
+		rc = riomp_mgmt_rcfg_write(acc_p->maint, pe_h->did_reg_val,
 				pe_h->hopcount, offset, sizeof(writedata),
 				writedata) ? RIO_ERR_ACCESS : RIO_SUCCESS;
 	}
+
 exit:
 	return rc;
-};
+}
 
 void SRIO_API_DelayFunc(uint32_t delay_nsec, uint32_t delay_sec)
 {
-	if (delay_nsec || delay_sec)
-		return;
-
-	return;
-};
+	struct timespec delay = {delay_sec, delay_nsec};
+	time_sleep(&delay);
+}
 
 #ifdef __cplusplus
 }

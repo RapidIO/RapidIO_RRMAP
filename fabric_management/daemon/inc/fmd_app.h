@@ -1,4 +1,3 @@
-/* Application (library) routines for internal use by FMD */
 /*
 ****************************************************************************
 Copyright (c) 2015, Integrated Device Technology Inc.
@@ -31,6 +30,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
+
+#ifndef __FMD_APP_H__
+#define __FMD_APP_H__
+
+/**
+ * @file fmd_app.h
+ * Application (library) routines for internal use by FMD
+ */
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -54,9 +62,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "fmd_dd.h"
 #include "fmd_app_msg.h"
 
-#ifndef __FMD_APP_H__
-#define __FMD_APP_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,40 +69,41 @@ extern "C" {
 struct fmd_app_mgmt_state {
 	int index;
 	int alloced;
-        int app_fd;
-        socklen_t addr_size;
-        struct sockaddr_un addr;
-        pthread_t app_thr;
-        int alive;
-        sem_t started;
-        volatile int i_must_die;
+	int app_fd;
+	socklen_t addr_size;
+	struct sockaddr_un addr;
+	pthread_t app_thr;
+	int alive;
+	sem_t started;
+	volatile int i_must_die;
 	uint32_t proc_num;
 	uint32_t flag;
-	char app_name[MAX_APP_NAME+1];
+	char app_name[MAX_APP_NAME + 1];
 	struct libfmd_dmn_app_msg req;
 	struct libfmd_dmn_app_msg resp;
 };
 
 struct app_mgmt_globals {
-        int port;
-        int bklg;
+	int port;
+	int bklg;
 	char *dd_fn;
 	char *dd_mtx_fn;
 
-        pthread_t conn_thread;
-        int loop_alive;
-        sem_t loop_started;
-        volatile int all_must_die;
+	pthread_t conn_thread;
+	int loop_alive;
+	sem_t loop_started;
+	volatile int all_must_die;
 	ct_t ct; /* Component tag of FMD mport */
 
-        int fd; /* File number library instance connect to */
-        struct sockaddr_un addr;
+	int fd; /* File number library instance connect to */
+	struct sockaddr_un addr;
 	sem_t apps_avail;
 	struct fmd_app_mgmt_state apps[FMD_MAX_APPS];
 };
 
-int start_fmd_app_handler(uint32_t port, uint32_t backlog,
-			char *dd_fn, char *dd_mtx_fn);
+int start_fmd_app_handler(uint32_t port, uint32_t backlog, char *dd_fn,
+		char *dd_mtx_fn);
+
 void halt_app_handler(void);
 
 void cleanup_app_handler(void);

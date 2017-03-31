@@ -55,9 +55,10 @@
 #include <time.h>
 #include <signal.h>
 
-#include "tok_parse.h"
 #include "rio_misc.h"
-#include <rapidio_mport_mgmt.h>
+#include "rio_route.h"
+#include "tok_parse.h"
+#include "rapidio_mport_mgmt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,7 +72,7 @@ static volatile sig_atomic_t report_status;
 
 static void usage(char *program)
 {
-	printf("%s - test RapidIO DoorBell exchange\n",	program);
+	printf("%s - test RapidIO DoorBell exchange\n", program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("Options are:\n");
@@ -100,10 +101,8 @@ static void usage(char *program)
 
 static void db_sig_handler(int signum)
 {
-	switch(signum) {
+	switch (signum) {
 	case SIGTERM:
-		rcv_exit = 1;
-		break;
 	case SIGINT:
 		rcv_exit = 1;
 		break;
@@ -117,7 +116,7 @@ static void db_sig_handler(int signum)
  * \brief Called by main() when DB receive mode is specified
  *
  * \param[in] hnd mport device handle
- * \param[in] rioid sender RapidIO destination ID
+ * \param[in] did_val sender RapidIO destination ID
  * \param[in] start doorbell range start
  * \param[in] end doorbell range end
  *
@@ -127,13 +126,14 @@ static void db_sig_handler(int signum)
  * Performs the following steps:
  *
  */
-int do_dbrcv_test(riomp_mport_t hnd, uint32_t rioid, uint16_t start, uint16_t end)
+int do_dbrcv_test(riomp_mport_t hnd, did_val_t did_val, uint16_t start,
+		uint16_t end)
 {
 	int ret;
 	struct riomp_mgmt_event evt;
 
 	/** - enable receiving doorbells in specified range */
-	ret = riomp_mgmt_dbrange_enable(hnd, rioid, start, end);
+	ret = riomp_mgmt_dbrange_enable(hnd, did_val, start, end);
 	if (ret) {
 		printf("Failed to enable DB range, err=%d\n", ret);
 		return ret;
@@ -148,28 +148,30 @@ int do_dbrcv_test(riomp_mport_t hnd, uint32_t rioid, uint16_t start, uint16_t en
 
 		ret = riomp_mgmt_get_event(hnd, &evt);
 		if (ret < 0) {
-			if (ret == -EAGAIN)
+			if (ret == -EAGAIN) {
 				continue;
+			}
 			else {
 				printf("Failed to read event, err=%d\n", ret);
 				break;
 			}
 		}
 
-		if (evt.header == RIO_EVENT_DOORBELL)
+		if (evt.header == RIO_EVENT_DOORBELL) {
 			printf("\tDB 0x%04x from destID %d\n",
-				evt.u.doorbell.payload, evt.u.doorbell.rioid);
-		else
+					evt.u.doorbell.payload,
+					evt.u.doorbell.did_val);
+		} else {
 			printf("\tIgnoring event type %d)\n", evt.header);
+		}
 	}
 
 	/** - on exit, disable specified doorbell range */
-	ret = riomp_mgmt_dbrange_disable(hnd, rioid, start, end);
+	ret = riomp_mgmt_dbrange_disable(hnd, did_val, start, end);
 	if (ret) {
 		printf("Failed to disable DB range, err=%d\n", ret);
 		return ret;
 	}
-
 	return 0;
 }
 
@@ -177,7 +179,7 @@ int do_dbrcv_test(riomp_mport_t hnd, uint32_t rioid, uint16_t start, uint16_t en
  * \brief Called by main() when in DB send mode
  *
  * \param[in] hnd mport device handle
- * \param[in] rioid target's RapidIO destination ID
+ * \param[in] did_val target's RapidIO destination ID
  * \param[in] dbval doorbell info field value
  *
  * \retval 0 means success
@@ -186,28 +188,29 @@ int do_dbrcv_test(riomp_mport_t hnd, uint32_t rioid, uint16_t start, uint16_t en
  * Performs the following steps:
  *
  */
-int do_dbsnd_test(riomp_mport_t hnd, uint32_t rioid, uint16_t dbval)
+int do_dbsnd_test(riomp_mport_t hnd, did_val_t did_val, uint16_t dbval)
 {
 	struct riomp_mgmt_event evt;
 	int ret = 0;
 
 	evt.header = RIO_EVENT_DOORBELL;
-	evt.u.doorbell.rioid = rioid;
+	evt.u.doorbell.did_val = did_val;
 	evt.u.doorbell.payload = dbval;
 
 	/** - send a single doorbell message to a target device */
 	ret = riomp_mgmt_send_event(hnd, &evt);
-	if (ret < 0)
+	if (ret < 0) {
 		printf("Write DB event failed, err=%d\n", ret);
-
+	}
 	return ret;
 }
 
-static void test_sigaction(int UNUSED(sig), siginfo_t *siginfo, void *UNUSED(context))
+static void test_sigaction(int UNUSED(sig), siginfo_t *siginfo,
+		void *UNUSED(context))
 {
-	printf ("SIGIO info PID: %ld, UID: %ld CODE: 0x%x BAND: 0x%lx FD: %d\n",
-			(long)siginfo->si_pid, (long)siginfo->si_uid, siginfo->si_code,
-			siginfo->si_band, siginfo->si_fd);
+	printf("SIGIO info PID: %ld, UID: %ld CODE: 0x%x BAND: 0x%lx FD: %d\n",
+			(long)siginfo->si_pid, (long)siginfo->si_uid,
+			siginfo->si_code, siginfo->si_band, siginfo->si_fd);
 	exit_no_dev = 1;
 }
 
@@ -230,16 +233,16 @@ int main(int argc, char** argv)
 
 	// command line parameters, all optional
 	uint32_t mport_id = 0;
-	uint32_t rio_destid = UINT32_MAX;
+	did_val_t did_val = UINT32_MAX;
 	uint32_t db_info = 0x5a5a;
 	uint32_t db_start = 0x5a5a;
 	uint32_t db_end = 0x5a5a;
 
 	static const struct option options[] = {
-		{ "destid", required_argument, NULL, 'D' },
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
+			{"destid", required_argument, NULL, 'D'},
+			{"mport", required_argument, NULL, 'M'},
+			{"debug", no_argument, NULL, 'd'},
+			{"help", no_argument, NULL, 'h'},
 	};
 
 	riomp_mport_t mport_hnd;
@@ -251,11 +254,12 @@ int main(int argc, char** argv)
 	int rc = EXIT_SUCCESS;
 
 	/** Parse command line options, if any */
-	while (-1 != (c = getopt_long_only(argc, argv, "rdhnD:I:M:S:E:",
-			options, NULL))) {
+	while (-1
+			!= (c = getopt_long_only(argc, argv, "rdhnD:I:M:S:E:",
+					options, NULL))) {
 		switch (c) {
 		case 'D':
-			if (tok_parse_did(optarg, &rio_destid, 0)) {
+			if (tok_parse_did(optarg, &did_val, 0)) {
 				printf(TOK_ERR_DID_MSG_FMT);
 				exit(EXIT_FAILURE);
 			}
@@ -280,7 +284,8 @@ int main(int argc, char** argv)
 			break;
 		case 'S':
 			if (tok_parse_ul(optarg, &db_start, 0)) {
-				printf(TOK_ERR_UL_HEX_MSG_FMT, "DoorBell start");
+				printf(TOK_ERR_UL_HEX_MSG_FMT,
+						"DoorBell start");
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -296,7 +301,8 @@ int main(int argc, char** argv)
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -308,10 +314,10 @@ int main(int argc, char** argv)
 	}
 
 	// set default for receive if value not provided
-	if (do_dbrecv && (UINT32_MAX == rio_destid)) {
-		rio_destid = RIO_LAST_DEV8;
+	if (do_dbrecv && (UINT32_MAX == did_val)) {
+		did_val = RIO_LAST_DEV8;
 	}
-	if (rio_destid > RIO_LAST_DEV8) {
+	if (did_val > RIO_LAST_DEV8) {
 		printf("Please specify a %s destination Id\n",
 				do_dbrecv ? "receive" : "transmit");
 	}
@@ -324,7 +330,7 @@ int main(int argc, char** argv)
 	rc = riomp_mgmt_mport_create_handle(mport_id, flags, &mport_hnd);
 	if (rc < 0) {
 		printf("DB Test: unable to open mport%d device err=%d\n",
-			mport_id, rc);
+				mport_id, rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -342,7 +348,7 @@ int main(int argc, char** argv)
 	}
 
 	/* Trap signals that we expect to receive */
-	signal(SIGINT,  db_sig_handler);
+	signal(SIGINT, db_sig_handler);
 	signal(SIGTERM, db_sig_handler);
 	signal(SIGUSR1, db_sig_handler);
 
@@ -351,16 +357,16 @@ int main(int argc, char** argv)
 	if (do_dbrecv) {
 		printf("+++ RapidIO Doorbell Receive Mode +++\n");
 		printf("\tmport%d PID:%d\n", mport_id, (int)getpid());
-		printf("\tfilter: destid=%x start=%x end=%x\n",
-			rio_destid, db_start, db_end);
+		printf("\tfilter: destid=%x start=%x end=%x\n", did_val,
+				db_start, db_end);
 
-		do_dbrcv_test(mport_hnd, rio_destid, db_start, db_end);
+		do_dbrcv_test(mport_hnd, did_val, db_start, db_end);
 	} else {
 		printf("+++ RapidIO Doorbell Send +++\n");
-		printf("\tmport%d destID=%d db_info=0x%x\n",
-			mport_id, rio_destid, db_info);
+		printf("\tmport%d destID=%d db_info=0x%x\n", mport_id,
+				did_val, db_info);
 
-		do_dbsnd_test(mport_hnd, rio_destid, db_info);
+		do_dbsnd_test(mport_hnd, did_val, db_info);
 	}
 
 out:

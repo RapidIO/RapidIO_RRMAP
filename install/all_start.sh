@@ -25,7 +25,7 @@ if [ "$START_FMD" = 'y' ]; then
                 echo "Starting fmd on $node destID=$DESTID"
                 ssh root@"$node" screen -dmS fmd $SOURCE_PATH/fabric_management/daemon/fmd -l 3
                 sleep 1
-                FMD_PID=$(ssh root@"$node" pgrep fmd)
+                FMD_PID=$(ssh root@"$node" pgrep -x fmd)
                 echo "$node fmd pid=$FMD_PID"
         sleep 1; # Allow FMD to enumerate nodes
         done

@@ -55,13 +55,14 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <ctype.h>
-#include <rapidio_mport_dma.h>
 #include <time.h>
 #include <signal.h>
 
+#include "rio_route.h"
 #include "tok_parse.h"
-#include <rapidio_mport_mgmt.h>
-#include <rapidio_mport_sock.h>
+#include "rapidio_mport_dma.h"
+#include "rapidio_mport_mgmt.h"
+#include "rapidio_mport_sock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,13 +73,13 @@ static int debug = 0;
 static volatile sig_atomic_t rcv_exit;
 static volatile sig_atomic_t report_status;
 
-
 static void usage(char *program)
 {
 	printf("%s - test RapidIO PortWrite events\n", program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("options are:\n");
+	printf("  --help (or -h)\n");
 	printf("  -M mport_id\n");
 	printf("  --mport mport_id\n");
 	printf("    local mport device index (default 0)\n");
@@ -89,17 +90,14 @@ static void usage(char *program)
 	printf("  -H xxxx\n");
 	printf("    high filter value (default 0xffffffff)\n");
 	printf("  -n run in non-blocking mode\n");
-	printf("  --help (or -h)\n");
 	/*printf("  --debug (or -d)\n");*/
 	printf("\n");
 }
 
 static void db_sig_handler(int signum)
 {
-	switch(signum) {
+	switch (signum) {
 	case SIGTERM:
-		rcv_exit = 1;
-		break;
 	case SIGINT:
 		rcv_exit = 1;
 		break;
@@ -118,7 +116,7 @@ static void db_sig_handler(int signum)
  * \param[in] low  Low boundary of masked CT range
  * \param[in] high Upper boundary of masked CT range
  *
- * \return 0 if successful or error code returned by mport API.
+ * \return 0 if successfull or error code returned by mport API.
  *
  * Performs the following steps:
  */
@@ -146,9 +144,9 @@ int do_pwrcv_test(riomp_mport_t hnd, uint32_t mask, uint32_t low, uint32_t high)
 		/** - Read pending event */
 		ret = riomp_mgmt_get_event(hnd, &evt);
 		if (ret < 0) {
-			if (ret == -EAGAIN)
+			if (ret == -EAGAIN) {
 				continue;
-			else {
+			} else {
 				printf("Failed to read event, err=%d\n", ret);
 				break;
 			}
@@ -159,12 +157,13 @@ int do_pwrcv_test(riomp_mport_t hnd, uint32_t mask, uint32_t low, uint32_t high)
 			int i;
 
 			printf("\tPort-Write message:\n");
-			for (i = 0; i < 16; i +=4) {
+			for (i = 0; i < 16; i += 4) {
 				printf("\t0x%02x: 0x%08x %08x %08x %08x\n",
-					i*4, evt.u.portwrite.payload[i],
-					evt.u.portwrite.payload[i + 1],
-					evt.u.portwrite.payload[i + 2],
-					evt.u.portwrite.payload[i + 3]);
+						i * 4,
+						evt.u.portwrite.payload[i],
+						evt.u.portwrite.payload[i + 1],
+						evt.u.portwrite.payload[i + 2],
+						evt.u.portwrite.payload[i + 3]);
 			}
 			printf("\n");
 			pw_count++;
@@ -180,10 +179,8 @@ int do_pwrcv_test(riomp_mport_t hnd, uint32_t mask, uint32_t low, uint32_t high)
 		printf("Failed to disable PW range, err=%d\n", ret);
 		return ret;
 	}
-
 	return 0;
 }
-
 
 /**
  * \brief Starting point of the program
@@ -208,9 +205,9 @@ int main(int argc, char** argv)
 	uint32_t pw_high = 0xffffffff;
 	int flags = 0;
 	static const struct option options[] = {
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
+			{"mport", required_argument, NULL, 'M'},
+			{"debug", no_argument, NULL, 'd'},
+			{"help",no_argument, NULL, 'h'},
 	};
 
 	struct riomp_mgmt_mport_properties prop;
@@ -220,8 +217,9 @@ int main(int argc, char** argv)
 	int rc = EXIT_SUCCESS;
 
 	/** Parse command line options, if any */
-	while (-1 != (c = getopt_long_only(argc, argv,
-			"dhnm:M:L:H:", options, NULL))) {
+	while (-1
+			!= (c = getopt_long_only(argc, argv, "dhnm:M:L:H:",
+					options, NULL))) {
 		switch (c) {
 		case 'm':
 			if (tok_parse_ul(optarg, &pw_mask, 0)) {
@@ -258,7 +256,8 @@ int main(int argc, char** argv)
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -273,7 +272,7 @@ int main(int argc, char** argv)
 	rc = riomp_mgmt_mport_create_handle(mport_id, flags, &mport_hnd);
 	if (rc < 0) {
 		printf("DB Test: unable to open mport%d device err=%d\n",
-			mport_id, rc);
+				mport_id, rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -292,7 +291,7 @@ int main(int argc, char** argv)
 	}
 
 	/** - Trap signals that we expect to receive */
-	signal(SIGINT,  db_sig_handler);
+	signal(SIGINT, db_sig_handler);
 	signal(SIGTERM, db_sig_handler);
 	signal(SIGUSR1, db_sig_handler);
 
@@ -309,8 +308,7 @@ int main(int argc, char** argv)
 
 	printf("+++ RapidIO PortWrite Event Receive Mode +++\n");
 	printf("\tmport%d PID:%d\n", mport_id, (int)getpid());
-	printf("\tfilter: mask=%x low=%x high=%x\n",
-		pw_mask, pw_low, pw_high);
+	printf("\tfilter: mask=%x low=%x high=%x\n", pw_mask, pw_low, pw_high);
 
 	/** - Execute port-write test function (until terminated) */
 	do_pwrcv_test(mport_hnd, pw_mask, pw_low, pw_high);

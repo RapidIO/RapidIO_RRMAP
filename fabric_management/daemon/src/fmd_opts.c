@@ -38,29 +38,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <semaphore.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/sem.h>
-#include <fcntl.h>
-
-#ifdef __WINDOWS__
-#include "stdafx.h"
-#include <io.h>
-#include <windows.h>
-#include "tsi721api.h"
-#include "IDT_Tsi721.h"
-#endif
-
-// #ifdef __LINUX__
-#include <stdint.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-// #endif
+
+#include <errno.h>
 
 #include "tok_parse.h"
 #include "fmd_dd.h"
@@ -97,15 +86,13 @@ void fmd_print_help(void)
 	printf("-s, -S: Simple initialization, do not populate device dir.\n");
 	printf("       Default is %d\n", FMD_DFLT_INIT_DD);
 	printf("-x, -X: Initialize and then immediately exit.\n");
-};
+}
 
 struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[])
 {
 	int c;
 
 	char *dflt_fmd_cfg = (char *)FMD_DFLT_CFG_FN;
-	char *dflt_dd_fn = (char *)FMD_DFLT_DD_FN;
-	char *dflt_dd_mtx_fn = (char *)FMD_DFLT_DD_MTX_FN;
 	struct fmd_opt_vals *opts;
 
 	opts = (struct fmd_opt_vals *)calloc(1, sizeof(struct fmd_opt_vals));
@@ -123,18 +110,10 @@ struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[])
 	opts->log_level = FMD_DFLT_LOG_LEVEL;
 	opts->mast_mode = 0;
 	opts->mast_interval = FMD_DFLT_MAST_INTERVAL;
-	opts->mast_devid_sz = FMD_DFLT_MAST_DEVID_SZ;
-	opts->mast_devid = FMD_DFLT_MAST_DEVID;
+	opts->mast_did = (did_t){FMD_DFLT_MAST_DEVID, dev08_sz};
 	opts->mast_cm_port = FMD_DFLT_MAST_CM_PORT;
 
 	if (update_string(&opts->fmd_cfg, dflt_fmd_cfg, strlen(dflt_fmd_cfg))) {
-		goto oom;
-	}
-	if (update_string(&opts->dd_fn, dflt_dd_fn, strlen(dflt_dd_fn))) {
-		goto oom;
-	}
-	if (update_string(&opts->dd_mtx_fn, dflt_dd_mtx_fn,
-			strlen(dflt_dd_mtx_fn))) {
 		goto oom;
 	}
 
@@ -164,7 +143,6 @@ struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[])
 		case 'h':
 		case 'H':
 			goto print_help;
-
 		case 'i':
 		case 'I':
 			if (tok_parse_ul(optarg, &opts->mast_interval,
@@ -209,7 +187,7 @@ struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[])
 		case 'X':
 			opts->init_and_quit = 1;
 			break;
-		case '?':
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (!isprint(optopt)) {

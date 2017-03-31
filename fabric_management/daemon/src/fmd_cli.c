@@ -50,22 +50,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#include "rio_misc.h"
 #include "tok_parse.h"
 #include "rio_ecosystem.h"
+#include "liblog.h"
+#include "libcli.h"
+#include "cfg.h"
 #include "fmd_dd.h"
 #include "fmd_app_msg.h"
-#include "liblog.h"
-#include "cfg.h"
 #include "fmd_state.h"
 #include "fmd.h"
 #include "fmd_app.h"
 #include "fmd_app.h"
 #include "fmd_master.h"
 #include "fmd_slave.h"
-// #include "cli_cmd_line.h"
-// #include "cli_cmd_db.h"
-// #include "cli_parse.h"
-#include "libcli.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -79,7 +77,7 @@ void display_apps_dd(struct cli_env *env)
 			if (!found_one) {
 				LOGMSG(env,
 						"         Idx V Fd A D ProcNum- Name\n");
-			};
+			}
 			found_one = 1;
 			LOGMSG(env, "         %3d %1d %2d %1d %1d %8d %s\n",
 					app_st.apps[i].index,
@@ -89,30 +87,27 @@ void display_apps_dd(struct cli_env *env)
 					app_st.apps[i].i_must_die,
 					app_st.apps[i].proc_num,
 					app_st.apps[i].app_name);
-		};
-	};
+		}
+	}
 
 	if (!found_one) {
 		LOGMSG(env, "         No apps connected...\n");
-	};
+	}
 }
 extern struct cli_cmd CLIStatus;
 
-int CLIStatusCmd(struct cli_env *env, int argc, char **argv)
+int CLIStatusCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 {
 	int app_cnt = 0, i;
 	struct fmd_peer *peer;
 	struct l_item_t *li;
-
-	if (0)
-		argv[0][0] = argc;
 
 	LOGMSG(env, "Rlogin  Alive: %1d Skt %5d\n\n", fmd->rlogin_alive,
 		fmd->opts->cli_port_num); 
 	for (i = 0; i < FMD_MAX_APPS; i++) {
 		if (app_st.apps[i].alloced)
 			app_cnt++;
-	};
+	}
 	LOGMSG(env, "AppMgmt Alive: %1d Exit: %1d  NumApps: %4d Skt: %5d\n",
 			app_st.loop_alive, app_st.all_must_die, app_cnt,
 			app_st.port);
@@ -125,7 +120,7 @@ int CLIStatusCmd(struct cli_env *env, int argc, char **argv)
 				fmp.slv.mast_skt_num,
 				fmp.slv.m_h_resp_valid ? "OK" : "No Hello Rsp");
 		goto exit;
-	};
+	}
 
 	LOGMSG(env, "\nPeerMgmt Alive %1d Exit %1d PeerCnt %4d MASTER %5d\n",
 			fmp.acc.acc_alive, fmp.acc.acc_must_die,
@@ -134,22 +129,23 @@ int CLIStatusCmd(struct cli_env *env, int argc, char **argv)
 	if (!l_size(&fmp.peers)) {
 		LOGMSG(env, "No connected peers.\n");
 		goto exit;
-	};
+	}
 
 	LOGMSG(env, "\n         ---CT--- ---DID-- HC A D I R\n");
 
 	peer = (struct fmd_peer *)l_head(&fmp.peers, &li);
 	while (NULL != peer) {
 		LOGMSG(env, "         %8x %8x %2x %1d %1d %1d %1d %s\n",
-				peer->p_ct, peer->p_did, peer->p_hc,
-				peer->rx_alive, peer->rx_must_die,
+				peer->p_ct, did_get_value(peer->p_did),
+				peer->p_hc, peer->rx_alive, peer->rx_must_die,
 				peer->init_cplt, peer->restart_init,
 				peer->peer_name);
 		peer = (struct fmd_peer *)l_next(&li);
-	};
-	exit: return 0;
+	}
+
+exit:
+	return 0;
 }
-;
 
 struct cli_cmd CLIStatus  = {
 (char *)"status",
@@ -177,18 +173,18 @@ int CLIAppCmd(struct cli_env *env, int argc, char **argv)
 			app_st.apps[idx].i_must_die = 1;
 			pthread_kill(app_st.apps[idx].app_thr, SIGHUP);
 			pthread_join(app_st.apps[idx].app_thr, NULL);
-		};
+		}
 		app_st.apps[idx].alive = 0;
 		app_st.apps[idx].i_must_die = 0;
 		app_st.apps[idx].proc_num = 0;
 		memset(app_st.apps[idx].app_name, 0, MAX_APP_NAME + 1);
 		app_st.apps[idx].alloced = 0;
-	};
+	}
 	display_apps_dd(env);
 
-	exit: return 0;
+exit:
+	return 0;
 }
-;
 
 struct cli_cmd CLIApp  = {
 (char *)"app",
@@ -212,7 +208,7 @@ int CLINotifyCmd(struct cli_env *env, int argc, char **argv)
 
 	fmd_notify_apps();
 	return 0;
-};
+}
 
 struct cli_cmd CLINotify  = {
 (char *)"notify",

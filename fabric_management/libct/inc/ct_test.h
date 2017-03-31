@@ -31,11 +31,8 @@
  *************************************************************************
  */
 
-/**
- * Component tag management
- */
-#ifndef CT_CT_TEST_H__
-#define CT_CT_TEST_H__
+#ifndef __CT_TEST_H__
+#define __CT_TEST_H__
 
 #include <stdint.h>
 #include "did.h"
@@ -54,4 +51,4 @@ void ct_reset();
 }
 #endif
 
-#endif /* CT_CT_TEST_H__ */
+#endif /* __CT_TEST_H__ */

@@ -1,37 +1,38 @@
 /*
-****************************************************************************
-Copyright (c) 2014, Integrated Device Technology Inc.
-Copyright (c) 2014, RapidIO Trade Association
-All rights reserved.
+ ****************************************************************************
+ Copyright (c) 2014, Integrated Device Technology Inc.
+ Copyright (c) 2014, RapidIO Trade Association
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without modification,
+ are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*************************************************************************
-*/
-#ifndef __LIBCLIDB_H__
-#define __LIBCLIDB_H__
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *************************************************************************
+ */
+
+#ifndef __LIBCLI_H__
+#define __LIBCLI_H__
 
 #include <stdio.h>
 #include <string.h>
@@ -58,28 +59,38 @@ extern "C" {
 struct cli_cmd;
 
 struct cli_env {
-	int	sess_socket;	/* Socket to use for input/output.
-				 *    Only valid if >0
-				 */
-	char	*script;	/* Name of script file to be processed.
-				 *    If null, process commands from stdin.
-				 */
-	FILE	*fout;		/* Log file to be written to.
-			 	 *    If null, output is only written to stdout.
-				 */
-	char	prompt[PROMPTLEN+1]; 	/* Prompt to print at command line,
-					 * preserve last byte for NULL termination.
-					 */
-	char	output[BUFLEN];  /* Buffered output string for echo */
-	char    input[BUFLEN];   /* Input read from socket etc */
-	int	DebugLevel;      /* Debug level of the current environment */
-	uint8_t	progressState;   /* Use to output spinning bar progress
-				  * execution
-				  */
-	void   *h;		/* Device which is the subject of 
-				 	 *    the current command.
-				 	 */
-	struct cli_cmd *cmd_prev; /* store last valid command */
+	// Socket to use for input/output. Only valid if >0
+	int sess_socket;
+
+	// Name of script file to be processed.
+	// If null, process commands from stdin.
+	char *script;
+
+	// Log file to be written to.
+	// If null, output is only written to stdout.
+	FILE *fout;
+
+	// Prompt to print at command line, preserve last byte for NULL
+	// termination.
+	char prompt[PROMPTLEN + 1];
+
+	// Buffered output string for echo
+	char output[BUFLEN];
+
+	// Input read from socket etc
+	char input[BUFLEN];
+
+	// Debug level of the current environment
+	int DebugLevel;
+
+	// Use to output spinning bar progress execution
+	uint8_t progressState;
+
+	// Device which is the subject of the current command.
+	void *h;
+
+	// store last valid command
+	struct cli_cmd *cmd_prev;
 };
 
 void init_cli_env(struct cli_env *env);
@@ -135,8 +146,7 @@ int get_v_str(char **target, char *parm, int chk_slash);
  */
 extern int cli_init_base(void (*console_cleanup)(struct cli_env *env));
 
-extern int add_commands_to_cmd_db(int num_cmds,
-				  struct cli_cmd **cmd_list);
+extern int add_commands_to_cmd_db(int num_cmds, struct cli_cmd **cmd_list);
 
 /* Display help for a command */
 extern int cli_print_help(struct cli_env *env, struct cli_cmd *cmd);
@@ -172,8 +182,8 @@ void *console(void *cons_parm);
 
 ///< Argument (forced to void*) to console_rc
 typedef struct {
-  const char* prompt; ///< CLI prompt
-  const char* script; ///< RC script
+	const char* prompt; ///< CLI prompt
+	const char* script; ///< RC script
 } ConsoleRc_t;
 
 /** \brief Run the console but first execute the RC script
@@ -185,7 +195,7 @@ void* console_rc(void *cons_parm);
  * port number.  Connections to the port number start a new thread with a CLI
  * session.  Note that "quit" will kill the calling process.  There is no
  * mutext between commands, so register reads/writes in different CLI sessions
- * may collide.  
+ * may collide.
  *
  * portno - TCP socket number remote_login binds/listens/accepts on.
  * thr_name - Name for the remote_login pthread.
@@ -195,7 +205,6 @@ void* console_rc(void *cons_parm);
  *          - The prompt for each thread managing an individual connection is
  *            the name of the thread with a '>' appended.
  */
-
 struct remote_login_parms {
 	int portno; /* Bind to this TCP Socket number  */
 	char thr_name[16]; /* Thread name */
@@ -205,9 +214,9 @@ struct remote_login_parms {
 extern pthread_t remote_login_thread;
 
 void* remote_login(void *remote_login_parm);
-	
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __LIBCLIDB_H__ */
+#endif /* __LIBCLI_H__ */

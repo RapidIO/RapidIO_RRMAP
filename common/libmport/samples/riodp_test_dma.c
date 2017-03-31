@@ -40,6 +40,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -59,11 +60,11 @@
 extern "C" {
 #endif
 
-#include "rio_standard.h"
 #include "rio_misc.h"
+#include "rio_route.h"
 #include "tok_parse.h"
-#include <rapidio_mport_dma.h>
-#include <rapidio_mport_mgmt.h>
+#include "rapidio_mport_dma.h"
+#include "rapidio_mport_mgmt.h"
 
 /// @cond
 /*
@@ -84,8 +85,8 @@ extern "C" {
 #define PATTERN_COUNT_MASK	0x1f
 
 struct dma_async_wait_param {
-	uint32_t token;		/* DMA transaction ID token */
-	int err;		/* error code returned to caller */
+	uint32_t token; /* DMA transaction ID token */
+	int err; /* error code returned to caller */
 };
 
 #define U8P uint8_t*
@@ -108,7 +109,7 @@ static uint32_t max_size = 4096;
 #define DEFAULT_IBWIN_SIZE (2 * 1024 * 1024)
 
 static riomp_mport_t mport_hnd;
-static uint32_t tgt_destid = RIO_LAST_DEV8;
+static did_val_t tgt_did_val = RIO_LAST_DEV8;
 static uint64_t tgt_addr;
 static uint32_t offset = 0;
 static uint16_t align = 0;
@@ -119,11 +120,13 @@ static uint32_t tbuf_size = TEST_BUF_SIZE;
 
 static void usage(char *program)
 {
-	printf("%s - test DMA data transfers to/from RapidIO device\n", program);
+	printf("%s - test DMA data transfers to/from RapidIO device\n",
+			program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("options are:\n");
 	printf("Common:\n");
+	printf("  --help (or -h)\n");
 	printf("  -M mport_id\n");
 	printf("  --mport mport_id\n");
 	printf("    local mport device index (default 0)\n");
@@ -132,7 +135,6 @@ static void usage(char *program)
 	printf("    physical address of reserved local memory to use (default any address)\n");
 	printf("  -v turn off buffer data verification\n");
 	printf("  --debug (or -d)\n");
-	printf("  --help (or -h)\n");
 	printf("DMA test mode only:\n");
 	printf("  -c \n");
 	printf("    clear the destination buffer by sending zeros first\n");
@@ -171,7 +173,8 @@ static void usage(char *program)
 	printf("    allocate and map inbound window (memory) using default parameters\n");
 	printf("  -I xxxx\n");
 	printf("  --ibwin xxxx\n");
-	printf("    inbound window (memory) size in bytes (default %u)\n", DEFAULT_IBWIN_SIZE);
+	printf("    inbound window (memory) size in bytes (default %u)\n",
+			DEFAULT_IBWIN_SIZE);
 	printf("  -R xxxx\n");
 	printf("  --ibbase xxxx\n");
 	printf("    inbound window base address in RapidIO address space (default any address)\n");
@@ -181,12 +184,12 @@ static void usage(char *program)
 static struct timespec timediff(struct timespec start, struct timespec end)
 {
 	struct timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	if ((end.tv_nsec - start.tv_nsec) < 0) {
+		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+		temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
 	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+		temp.tv_sec = end.tv_sec - start.tv_sec;
+		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
 	}
 	return temp;
 }
@@ -195,36 +198,42 @@ static void dmatest_clear_srcs(uint8_t *buf, unsigned int buf_size)
 {
 	unsigned int i;
 
-	for (i = 0; i < buf_size; i++)
+	for (i = 0; i < buf_size; i++) {
 		buf[i] = 0;
+	}
 }
 
 static void dmatest_init_srcs(uint8_t *buf, unsigned int start,
-			      unsigned int len, unsigned int buf_size)
+		unsigned int len, unsigned int buf_size)
 {
 	unsigned int i;
 
-	for (i = 0; i < start; i++)
+	for (i = 0; i < start; i++) {
 		buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
-	for ( ; i < start + len; i++)
-		buf[i] = PATTERN_SRC | PATTERN_COPY
-			| (~i & PATTERN_COUNT_MASK);
-	for ( ; i < buf_size; i++)
+	}
+	for (; i < start + len; i++) {
+		buf[i] = PATTERN_SRC | PATTERN_COPY | (~i & PATTERN_COUNT_MASK);
+	}
+	for (; i < buf_size; i++) {
 		buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
+	}
 }
 
 static void dmatest_init_dsts(uint8_t *buf, unsigned int start,
-			      unsigned int len, unsigned int buf_size)
+		unsigned int len, unsigned int buf_size)
 {
 	unsigned int i;
 
-	for (i = 0; i < start; i++)
+	for (i = 0; i < start; i++) {
 		buf[i] = PATTERN_DST | (~i & PATTERN_COUNT_MASK);
-	for ( ; i < start + len; i++)
+	}
+	for (; i < start + len; i++) {
 		buf[i] = PATTERN_DST | PATTERN_OVERWRITE
-			| (~i & PATTERN_COUNT_MASK);
-	for ( ; i < buf_size; i++)
+				| (~i & PATTERN_COUNT_MASK);
+	}
+	for (; i < buf_size; i++) {
 		buf[i] = PATTERN_DST | (~i & PATTERN_COUNT_MASK);
+	}
 }
 
 static void dmatest_dump_mem(uint8_t *buf, unsigned int start,
@@ -238,35 +247,36 @@ static void dmatest_dump_mem(uint8_t *buf, unsigned int start,
 		dumpLen = 0x200;
 	}
 
-	for (i = 0; i < dumpLen; i++)
+	for (i = 0; i < dumpLen; i++) {
 		if (i % 16 == 0) {
 			printf("\n%08x: %02x ", start + i, buf[i]);
 		} else {
 			printf("%02x ", buf[i]);
 		}
+	}
 	printf("\n");
 }
 
 static void dmatest_mismatch(uint8_t actual, uint8_t pattern,
-			     unsigned int index, unsigned int counter,
-			     int is_srcbuf)
+		unsigned int index, unsigned int counter, int is_srcbuf)
 {
 	uint8_t diff = actual ^ pattern;
 	uint8_t expected = pattern | (~counter & PATTERN_COUNT_MASK);
 
-	if (is_srcbuf)
+	if (is_srcbuf) {
 		printf("srcbuf[0x%x] overwritten! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else if ((pattern & PATTERN_COPY)
-			&& (diff & (PATTERN_COPY | PATTERN_OVERWRITE)))
+				index, expected, actual);
+	} else if ((pattern & PATTERN_COPY)
+			&& (diff & (PATTERN_COPY | PATTERN_OVERWRITE))) {
 		printf("dstbuf[0x%x] not copied! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else if (diff & PATTERN_SRC)
+				index, expected, actual);
+	} else if (diff & PATTERN_SRC) {
 		printf("dstbuf[0x%x] was copied! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else
+				index, expected, actual);
+	} else {
 		printf("dstbuf[0x%x] mismatch! Expected %02x, got %02x\n",
-			index, expected, actual);
+				index, expected, actual);
+	}
 }
 
 /**
@@ -300,17 +310,18 @@ static unsigned int dmatest_verify_buf_segment(uint8_t *buf, unsigned int start,
 		actual = buf[i];
 		expected = pattern | (~counter & PATTERN_COUNT_MASK);
 		if (actual != expected) {
-			if (error_count < MAX_ERROR_COUNT)
-				dmatest_mismatch(actual, pattern, i,
-							counter, is_srcbuf);
+			if (error_count < MAX_ERROR_COUNT) {
+				dmatest_mismatch(actual, pattern, i, counter,
+						is_srcbuf);
+			}
 			error_count++;
 		}
 		counter++;
 	}
 
-	if (error_count > MAX_ERROR_COUNT)
+	if (error_count > MAX_ERROR_COUNT) {
 		printf("%u errors suppressed\n", error_count - MAX_ERROR_COUNT);
-
+	}
 	return error_count;
 }
 
@@ -327,12 +338,14 @@ static unsigned int dmatest_verify_buf_segment(uint8_t *buf, unsigned int start,
  * \param[in] counter   Cumulative 'offset' of the byte being examined (for error reporting)
  * \param[in] pattern   Expected pattern
  * \param[in] is_srcbuf Flag indicating if buffer is source buffer (for error reporting)
+ * \param[in] interleave parameters
  *
  * \return Count of the number of verification failures found.
  */
-static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigned int start,
-		unsigned int end, unsigned int counter, uint8_t pattern,
-		int is_srcbuf, struct rapidio_mport_interleave *interleave)
+static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf,
+		unsigned int start, unsigned int end, unsigned int counter,
+		uint8_t pattern, int is_srcbuf,
+		struct rapidio_mport_interleave *interleave)
 {
 	bool debug = false;
 	unsigned int dest_count;
@@ -348,20 +361,28 @@ static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigne
 	src_count = counter;
 	for (dest_count = start; dest_count < end; dest_count++) {
 		actual = buf[dest_count];
+
 		if (in_dst_stride) {
 			expected = pattern | (~src_count & PATTERN_COUNT_MASK);
 		} else {
 			expected = 0;
 		}
+
 		if (actual != expected) {
-			if (error_count < MAX_ERROR_COUNT)
+			if (error_count < MAX_ERROR_COUNT) {
 				dmatest_mismatch(actual, pattern, dest_count,
-							src_count, is_srcbuf);
+						src_count, is_srcbuf);
+			}
 			error_count++;
 		}
-		if (debug)
-			printf("%02x %02x %3d %3d %3d %3d %3d %3d\n", actual, expected, dest_count, src_count,
-				in_dst_stride, in_src_stride, in_dst_count, in_src_count);
+
+		if (debug) {
+			printf("%02x %02x %3d %3d %3d %3d %3d %3d\n", actual,
+					expected, dest_count, src_count,
+					in_dst_stride, in_src_stride,
+					in_dst_count, in_src_count);
+		}
+
 		if (in_dst_stride == in_src_stride) {
 			src_count++;
 		} else if (!in_dst_stride && in_src_stride) {
@@ -370,6 +391,7 @@ static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigne
 			src_count += in_src_count + 1;
 			in_src_count = 0;
 		}
+
 		if (--in_src_count <= 0) {
 			if (in_src_stride) {
 				in_src_count = interleave->ssdist;
@@ -379,6 +401,7 @@ static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigne
 				in_src_stride = true;
 			}
 		}
+
 		if (--in_dst_count <= 0) {
 			if (in_dst_stride) {
 				in_dst_count = interleave->dsdist;
@@ -386,6 +409,7 @@ static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigne
 			} else {
 				in_dst_count = interleave->dssize;
 				in_dst_stride = true;
+
 				if (in_src_stride && in_src_count > 0) {
 					src_count -= in_src_count;
 					in_src_count = 0;
@@ -394,43 +418,54 @@ static unsigned int dmatest_verify_interleaved_buf_segment(uint8_t *buf, unsigne
 		}
 	}
 
-	if (error_count > MAX_ERROR_COUNT)
+	if (error_count > MAX_ERROR_COUNT) {
 		printf("%u errors suppressed\n", error_count - MAX_ERROR_COUNT);
+	}
 
 	return error_count;
 }
 
 static unsigned int dmatest_verify_buffer(uint8_t *buf, unsigned int src_off,
-		unsigned int src_len, unsigned int buf_len, uint8_t pattern_src, uint8_t pattern_dst,
-		uint8_t pattern_copy,
-		int is_srcbuf, struct rapidio_mport_interleave *interleave)
+		unsigned int src_len, unsigned int buf_len, uint8_t pattern_src,
+		uint8_t pattern_dst, uint8_t pattern_copy, int is_srcbuf,
+		struct rapidio_mport_interleave *interleave)
 {
 	unsigned int error_count = 0;
 	unsigned int counter = 0;
+	bool simpleBuffer;
 
-	/* check bytest before src_off */
-	error_count = dmatest_verify_buf_segment(buf, 0, src_off,
-		counter, pattern_dst, is_srcbuf);
+	/* check bytes before src_off */
+	error_count = dmatest_verify_buf_segment(buf, 0, src_off, counter,
+			pattern_dst, is_srcbuf);
+
 	counter += src_off;
-	if ((interleave == NULL) ||
-			(interleave->ssdist == 0 && interleave->sssize == 0 &&
-			 interleave->dsdist == 0 && interleave->dssize == 0)) {
+
+	if (NULL == interleave) {
+		simpleBuffer = true;
+	} else {
+		simpleBuffer = ((0 == interleave->ssdist)
+				&& (0 == interleave->sssize)
+				&& (0 == interleave->dsdist)
+				&& (0 == interleave->dssize));
+	}
+
+	if (simpleBuffer) {
 		/* simple buffer verify */
 		error_count += dmatest_verify_buf_segment(buf, src_off,
-			src_off + src_len, counter,
-			pattern_src | pattern_copy, is_srcbuf);
+				src_off + src_len, counter,
+				pattern_src | pattern_copy, is_srcbuf);
 		counter += src_len;
 	} else {
-		error_count += dmatest_verify_interleaved_buf_segment(buf, src_off,
-			src_off + src_len, counter,
-			pattern_src | pattern_copy, is_srcbuf, interleave);
+		error_count += dmatest_verify_interleaved_buf_segment(buf,
+				src_off, src_off + src_len, counter,
+				pattern_src | pattern_copy, is_srcbuf,
+				interleave);
 		counter += src_len;
 	}
 
 	/* and check remainder of buffer */
 	error_count += dmatest_verify_buf_segment(buf, src_off + src_len,
-		buf_len, counter,
-		pattern_dst, is_srcbuf);
+			buf_len, counter, pattern_dst, is_srcbuf);
 
 	return error_count;
 }
@@ -452,7 +487,8 @@ static unsigned int dmatest_verify_buffer(uint8_t *buf, unsigned int src_off,
  *
  * \return A user-space pointer to the allocated buffer or NULL on failure.
  */
-void *dmatest_buf_alloc(riomp_mport_t mport_hnd, uint32_t size, uint64_t *handle)
+void *dmatest_buf_alloc(riomp_mport_t mport_hnd, uint32_t size,
+		uint64_t *handle)
 {
 	void *buf_ptr = NULL;
 	uint64_t h;
@@ -463,8 +499,10 @@ void *dmatest_buf_alloc(riomp_mport_t mport_hnd, uint32_t size, uint64_t *handle
 
 		ret = riomp_dma_dbuf_alloc(mport_hnd, size, &h);
 		if (ret) {
-			if (debug)
-				printf("riomp_dma_dbuf_alloc failed err=%d\n", ret);
+			if (debug) {
+				printf("riomp_dma_dbuf_alloc failed err=%d\n",
+						ret);
+			}
 			return NULL;
 		}
 
@@ -473,14 +511,18 @@ void *dmatest_buf_alloc(riomp_mport_t mport_hnd, uint32_t size, uint64_t *handle
 			perror("mmap");
 			buf_ptr = NULL;
 			ret = riomp_dma_dbuf_free(mport_hnd, handle);
-			if (ret && debug)
-				printf("riomp_dma_dbuf_free failed err=%d\n", ret);
-		} else
+			if (ret && debug) {
+				printf("riomp_dma_dbuf_free failed err=%d\n",
+						ret);
+			}
+		} else {
 			*handle = h;
+		}
 	} else {
 		buf_ptr = malloc(size);
-		if (buf_ptr == NULL )
+		if (buf_ptr == NULL) {
 			perror("malloc");
+		}
 	}
 
 	return buf_ptr;
@@ -501,20 +543,23 @@ void *dmatest_buf_alloc(riomp_mport_t mport_hnd, uint32_t size, uint64_t *handle
  * \return None
  */
 void dmatest_buf_free(riomp_mport_t mport_hnd, void *buf, uint32_t size,
-			uint64_t *handle)
+		uint64_t *handle)
 {
 	if (handle && *handle) {
 		int ret;
 
 		ret = riomp_dma_unmap_memory(size, buf);
-		if (ret)
+		if (ret) {
 			perror("munmap");
+		}
 
 		ret = riomp_dma_dbuf_free(mport_hnd, handle);
-		if (ret)
+		if (ret) {
 			printf("riomp_dma_dbuf_free failed err=%d\n", ret);
-	} else if (buf)
+		}
+	} else if (buf) {
 		free(buf);
+	}
 }
 
 /**
@@ -527,57 +572,66 @@ void dmatest_buf_free(riomp_mport_t mport_hnd, void *buf, uint32_t size,
  * \param[in] loc_addr Physical address in reserved memory range
  * \param[in] verify Flag to enable/disable data verification on exit
  *
- * \return 0 if successful or error code returned by mport API.
+ * \return 0 if successfull or error code returned by mport API.
  *
  * Performs the following steps:
  *
  */
 int do_ibwin_test(uint64_t rio_base, uint32_t ib_size, uint64_t loc_addr,
-		  int verify)
+		int verify)
 {
 	int ret;
 	uint64_t ib_handle = loc_addr;
 	void *ibmap;
 
-	/** - Request mport's inbound window mapping */ 
+	/** - Request mport's inbound window mapping */
 	ret = riomp_dma_ibwin_map(mport_hnd, &rio_base, ib_size, &ib_handle);
 	if (ret) {
 		printf("Failed to allocate/map IB buffer err=%d\n", ret);
 		return ret;
 	}
+
 	/** - Map associated kernel buffer into process address space */
 	ret = riomp_dma_map_memory(mport_hnd, ib_size, ib_handle, &ibmap);
 	if (ret) {
 		perror("mmap");
 		goto out;
 	}
-	
+
 	memset(ibmap, 0, ib_size);
 
-	printf("\tSuccessfully allocated/mapped IB buffer (rio_base=0x%x_%08x)\n",
-	       (uint32_t)(rio_base >> 32), (uint32_t)(rio_base & 0xffffffff));
+	printf(
+			"\tSuccessfully allocated/mapped IB buffer (rio_base=0x%x_%08x)\n",
+			(uint32_t)(rio_base >> 32),
+			(uint32_t)(rio_base & 0xffffffff));
 
-	if (debug)
+	if (debug) {
 		printf("\t(h=0x%x_%x, loc=%p)\n", (uint32_t)(ib_handle >> 32),
-			(uint32_t)(ib_handle & 0xffffffff), ibmap);
-	printf("\t.... press Enter key to exit ....\n");
+				(uint32_t)(ib_handle & 0xffffffff), ibmap);
+	}
 
 	/** - Pause until a user presses Enter key */
+	printf("\t.... press Enter key to exit ....\n");
 	getchar();
+
 	/** - Verify data before exit (if requested) */
-	if (verify)
-		dmatest_verify_buf_segment((U8P)ibmap, 0, ib_size, 0, PATTERN_SRC | PATTERN_COPY, 0);
+	if (verify) {
+		dmatest_verify_buf_segment((U8P)ibmap, 0, ib_size, 0,
+				PATTERN_SRC | PATTERN_COPY, 0);
+	}
 
 	/** - Unmap kernel-space data buffer */
 	ret = riomp_dma_unmap_memory(ib_size, ibmap);
-	if (ret)
+	if (ret) {
 		perror("munmap");
+	}
+
 out:
 	/** - Release mport's inbound mapping window */
 	ret = riomp_dma_ibwin_free(mport_hnd, &ib_handle);
-	if (ret)
+	if (ret) {
 		printf("Failed to release IB buffer err=%d\n", ret);
-
+	}
 	return 0;
 }
 
@@ -604,8 +658,10 @@ static void *dma_async_wait(void *arg)
  * \param[in] loop_count Number of write-read cycles to perform
  * \param[in] sync DMA transfer synchronization mode
  * \param[in] loc_addr Physical address in reserved memory range
+ * \param[in] clear_buf Clear destination buffers when true
+ * \param[in] interleave parameters
  *
- * \return 0 if successful or error code returned by mport API.
+ * \return 0 if successfull or error code returned by mport API.
  *
  * Performs the following steps:
  */
@@ -626,33 +682,38 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 	struct timespec rd_starttime, rd_endtime;
 	float totaltime;
 
-	if (kbuf_mode)
+	if (kbuf_mode) {
 		max_hw_size = max_size;
-	else
-		max_hw_size = (max_sge == 0)?tbuf_size:(max_sge * getpagesize());
+	} else {
+		max_hw_size = (max_sge == 0) ?
+				tbuf_size : (max_sge * getpagesize());
+	}
 
 	/* check specified DMA block size */
-	if (dma_size > 0 &&
-	    (dma_size > tbuf_size || dma_size > max_hw_size)) {
+	if (dma_size > 0 && (dma_size > tbuf_size || dma_size > max_hw_size)) {
 		printf("ERR: invalid buffer size parameter\n");
 		printf("     max allowed buffer size: %d bytes\n",
-		       (max_hw_size > tbuf_size)?tbuf_size:max_hw_size);
+				(max_hw_size > tbuf_size) ?
+						tbuf_size : max_hw_size);
 		return -1;
 	}
 
 	if (random) {
 		/* If not specified, set max supported dma_size */
-		if (dma_size == 0)
-			dma_size = (max_hw_size < tbuf_size)?max_hw_size:tbuf_size;
-
-		printf("\tRANDOM mode is selected for size/offset combination\n");
+		if (dma_size == 0) {
+			dma_size = (max_hw_size < tbuf_size) ?
+					max_hw_size : tbuf_size;
+		}
+		printf(
+				"\tRANDOM mode is selected for size/offset combination\n");
 		printf("\t\tmax data transfer size: %d bytes\n", dma_size);
 		srand(time(NULL));
 	} else if (dma_size + offset > tbuf_size || dma_size == 0) {
-			printf("ERR: invalid transfer size/offset combination\n");
-			return -1;
-	} else
+		printf("ERR: invalid transfer size/offset combination\n");
+		return -1;
+	} else {
 		printf("\tdma_size=%d offset=0x%x\n", dma_size, offset);
+	}
 
 	/** * Allocate source and destination buffers in specified space (kernel or user) */
 
@@ -661,14 +722,16 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 		dst_handle = loc_addr + tbuf_size;
 	}
 
-	buf_src = dmatest_buf_alloc(mport_hnd, tbuf_size, kbuf_mode?&src_handle:NULL);
+	buf_src = dmatest_buf_alloc(mport_hnd, tbuf_size,
+			kbuf_mode ? &src_handle : NULL);
 	if (buf_src == NULL) {
 		printf("DMA Test: error allocating SRC buffer\n");
 		ret = -1;
 		goto out_src;
 	}
 
-	buf_dst = dmatest_buf_alloc(mport_hnd, tbuf_size, kbuf_mode?&dst_handle:NULL);
+	buf_dst = dmatest_buf_alloc(mport_hnd, tbuf_size,
+			kbuf_mode ? &dst_handle : NULL);
 	if (buf_dst == NULL) {
 		printf("DMA Test: error allocating DST buffer\n");
 		ret = -1;
@@ -683,8 +746,9 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 		if (random) {
 			len = rand() % dma_size + 1;
 			len = (len >> align) << align;
-			if (!len)
+			if (!len) {
 				len = 1 << align;
+			}
 			src_off = rand() % (tbuf_size - len + 1);
 			dst_off = rand() % (tbuf_size - len + 1);
 
@@ -695,103 +759,132 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 			src_off = offset;
 			dst_off = offset;
 		}
+
 		/* source length may be larger if source interleave is configured */
-		if (interleave->ssdist == 0 and interleave->sssize == 0) {
+		if ((0 == interleave->ssdist) && (0 == interleave->sssize)) {
 			src_len = len;
 		} else {
-			src_len = len * (interleave->ssdist + interleave->sssize) / interleave->ssdist;
+			src_len = len * (interleave->ssdist + interleave->sssize)
+					/ interleave->ssdist;
 		}
+
+		printf("<%d>: len=0x%x src_off=0x%x dst_off=0x%x\n", i, len,
+				src_off, dst_off);
 
 		if (clear_buf) {
 			if (debug) {
 				printf("Clearing destination buffer\n");
 			}
+
 			dmatest_clear_srcs((U8P)buf_src, tbuf_size);
-			if (kbuf_mode)
-				ret = riomp_dma_write_d(mport_hnd, tgt_destid, tgt_addr,
-							src_handle, src_off, len,
-							RIO_DIRECTIO_TYPE_NWRITE_R, sync, NULL);
-			else
-				ret = riomp_dma_write(mport_hnd, tgt_destid, tgt_addr,
-						      (U8P)buf_src + src_off, len,
-						      RIO_DIRECTIO_TYPE_NWRITE_R, sync, NULL);
+			if (kbuf_mode) {
+				ret = riomp_dma_write_d(mport_hnd, tgt_did_val,
+						tgt_addr, src_handle, src_off,
+						len, RIO_DIRECTIO_TYPE_NWRITE_R,
+						sync, NULL);
+			} else {
+				ret = riomp_dma_write(mport_hnd, tgt_did_val,
+						tgt_addr,
+						(U8P)buf_src + src_off, len,
+						RIO_DIRECTIO_TYPE_NWRITE_R,
+						sync, NULL);
+			}
 
-		}
-		printf("<%d>: len=0x%x src_off=0x%x dst_off=0x%x\n",
-			i, len, src_off, dst_off);
-
-		/** - If data verification is requested, fill src and dst buffers
-                 * with predefined data */
-		if (verify) {
-			dmatest_init_srcs((U8P)buf_src, src_off, src_len, tbuf_size);
-			dmatest_init_dsts((U8P)buf_dst, dst_off, len, tbuf_size);
-			if (debug) {
-				printf("Buffers before xfer:\n");
-				dmatest_dump_mem((U8P)buf_src, src_off, tbuf_size);
-				dmatest_dump_mem((U8P)buf_dst, dst_off, tbuf_size);
+			if (ret < 0) {
+				printf("DMA Test: Clearing destination buffer failed err=%d\n",
+						ret);
+				goto out;
 			}
 		}
 
-		if (debug)
-			printf("\tWrite %d bytes from src offset 0x%x\n", len, src_off);
+		/** - If data verification is requested, fill src and dst buffers
+		 * with predefined data */
+		if (verify) {
+			dmatest_init_srcs((U8P)buf_src, src_off, src_len,
+					tbuf_size);
+			dmatest_init_dsts((U8P)buf_dst, dst_off, len,
+					tbuf_size);
+			if (debug) {
+				printf("Buffers before xfer:\n");
+				dmatest_dump_mem((U8P)buf_src, src_off,
+						tbuf_size);
+				dmatest_dump_mem((U8P)buf_dst, dst_off,
+						tbuf_size);
+			}
+		}
+
+		if (debug) {
+			printf("\tWrite %d bytes from src offset 0x%x\n", len,
+					src_off);
+		}
 		clock_gettime(CLOCK_MONOTONIC, &wr_starttime);
 
 		/** - Write data from local source buffer to remote target inbound buffer */
-		if (kbuf_mode)
-			ret = riomp_dma_write_d(mport_hnd, tgt_destid, tgt_addr,
-						src_handle, src_off, len,
-						RIO_DIRECTIO_TYPE_NWRITE_R, sync, interleave);
-		else
-			ret = riomp_dma_write(mport_hnd, tgt_destid, tgt_addr,
-					      (U8P)buf_src + src_off, len,
-					      RIO_DIRECTIO_TYPE_NWRITE_R, sync, interleave);
+		if (kbuf_mode) {
+			ret = riomp_dma_write_d(mport_hnd, tgt_did_val,
+					tgt_addr, src_handle, src_off, len,
+					RIO_DIRECTIO_TYPE_NWRITE_R, sync,
+					interleave);
+		} else {
+			ret = riomp_dma_write(mport_hnd, tgt_did_val, tgt_addr,
+					(U8P)buf_src + src_off, len,
+					RIO_DIRECTIO_TYPE_NWRITE_R, sync,
+					interleave);
+		}
+
 		/** - If in ASYNC DMA transfer mode, create waiting thread for write */
-		if (sync == RIO_DIRECTIO_TRANSFER_ASYNC) {
-			if (ret >=0) {
-				wr_wait.token = ret;
-				wr_wait.err = -1;
-				ret = pthread_create(&wr_thr, NULL, dma_async_wait, (void *)&wr_wait);
-				if (ret)
-					printf("\tERR: Failed to create WR wait thread. err=%d\n", ret);
+		if ((sync == RIO_DIRECTIO_TRANSFER_ASYNC) && (ret >= 0)) {
+			wr_wait.token = ret;
+			wr_wait.err = -1;
+			ret = pthread_create(&wr_thr, NULL, dma_async_wait, (void *)&wr_wait);
+			if (ret) {
+				printf("\tERR: Failed to create WR wait thread. err=%d\n", ret);
 			}
 		}
 
 		clock_gettime(CLOCK_MONOTONIC, &wr_endtime);
 		if (ret) {
-			printf("DMA Test: write DMA transfer failed err=%d\n", ret);
+			printf("DMA Test: write DMA transfer failed err=%d\n",
+					ret);
 			goto out;
 		}
 
-		if (debug)
-			printf("\tRead %d bytes to dst offset 0x%x\n", len, dst_off);
+		if (debug) {
+			printf("\tRead %d bytes to dst offset 0x%x\n", len,
+					dst_off);
+		}
 
 		/* RIO_TRANSFER_FAF is not available for read operations. Force SYNC instead. */
-		rd_sync = (sync == RIO_DIRECTIO_TRANSFER_FAF)?RIO_DIRECTIO_TRANSFER_SYNC:sync;
+		rd_sync = (sync == RIO_DIRECTIO_TRANSFER_FAF) ?
+				RIO_DIRECTIO_TRANSFER_SYNC : sync;
 
 		clock_gettime(CLOCK_MONOTONIC, &rd_starttime);
 
 		/** - Read back data from remote target inbound buffer into local destination buffer */
-		if (kbuf_mode)
-			ret = riomp_dma_read_d(mport_hnd, tgt_destid, tgt_addr,
-					dst_handle, dst_off, len, rd_sync, NULL);
-		else
-			ret = riomp_dma_read(mport_hnd, tgt_destid, tgt_addr,
-					(U8P)buf_dst + dst_off, len, rd_sync, NULL);
+		if (kbuf_mode) {
+			ret = riomp_dma_read_d(mport_hnd, tgt_did_val, tgt_addr,
+					dst_handle, dst_off, len, rd_sync,
+					NULL);
+		} else {
+			ret = riomp_dma_read(mport_hnd, tgt_did_val, tgt_addr,
+					(U8P)buf_dst + dst_off, len, rd_sync,
+					NULL);
+		}
 
 		/** - If in ASYNC DMA transfer mode, create waiting thread for reag */
-		if (sync == RIO_DIRECTIO_TRANSFER_ASYNC) {
-			if (ret >=0) {
-				rd_wait.token = ret;
-				rd_wait.err = -1;
-				ret = pthread_create(&rd_thr, NULL, dma_async_wait, (void *)&rd_wait);
-				if (ret)
-					printf("\tERR: Failed to create RD wait thread. err=%d\n", ret);
+		if ((sync == RIO_DIRECTIO_TRANSFER_ASYNC) && (ret >= 0)) {
+			rd_wait.token = ret;
+			rd_wait.err = -1;
+			ret = pthread_create(&rd_thr, NULL, dma_async_wait, (void *)&rd_wait);
+			if (ret) {
+				printf("\tERR: Failed to create RD wait thread. err=%d\n", ret);
 			}
 		}
 
 		clock_gettime(CLOCK_MONOTONIC, &rd_endtime);
 		if (ret) {
-			printf("DMA Test: read DMA transfer failed err=%d\n", ret);
+			printf("DMA Test: read DMA transfer failed err=%d\n",
+					ret);
 			goto out;
 		}
 
@@ -802,12 +895,18 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 			pthread_join(wr_thr, NULL);
 			pthread_join(rd_thr, NULL);
 			clock_gettime(CLOCK_MONOTONIC, &rd_endtime);
-			if (wr_wait.err)
-				printf("Wait for DMA_WR: err=%d\n", wr_wait.err);
-			if (rd_wait.err)
-				printf("Wait for DMA_RD: err=%d\n", rd_wait.err);
-			if (wr_wait.err || rd_wait.err)
+
+			if (wr_wait.err) {
+				printf("Wait for DMA_WR: err=%d\n",
+						wr_wait.err);
+			}
+			if (rd_wait.err) {
+				printf("Wait for DMA_RD: err=%d\n",
+						rd_wait.err);
+			}
+			if (wr_wait.err || rd_wait.err) {
 				goto out;
+			}
 		}
 
 		/** - If data verification is requested, verify data transfer results */
@@ -816,56 +915,92 @@ int do_dma_test(int random, int kbuf_mode, int verify, int loop_count,
 
 			if (debug) {
 				printf("Buffer contents after transfer:\n");
-				dmatest_dump_mem((U8P)buf_src, src_off, tbuf_size);
-				dmatest_dump_mem((U8P)buf_dst, dst_off, tbuf_size);
+				dmatest_dump_mem((U8P)buf_src, src_off,
+						tbuf_size);
+				dmatest_dump_mem((U8P)buf_dst, dst_off,
+						tbuf_size);
 			}
 
-			if (debug)
+			if (debug) {
 				printf("\tVerifying source buffer...\n");
-			error_count = dmatest_verify_buffer((U8P)buf_src, src_off,
-					src_len, tbuf_size, PATTERN_SRC, PATTERN_SRC, PATTERN_COPY,
+			}
+			error_count = dmatest_verify_buffer((U8P)buf_src,
+					src_off, src_len, tbuf_size,
+					PATTERN_SRC, PATTERN_SRC, PATTERN_COPY,
 					1, NULL);
+			if (error_count) {
+				printf(
+						"\tSource buffer verification failed with %d errors\n",
+						error_count);
+				break;
+			} else {
+				if (debug) {
+					printf("\ttSource buffer verification OK!\n");
+				}
+			}
 
-			if (debug)
+			if (debug) {
 				printf("\tVerifying destination buffer...\n");
-			error_count = dmatest_verify_buffer((U8P)buf_dst, dst_off,
-					len, tbuf_size, PATTERN_SRC, PATTERN_DST, PATTERN_COPY,
-					0, interleave);
+			}
+			error_count = dmatest_verify_buffer((U8P)buf_dst,
+					dst_off, len, tbuf_size, PATTERN_SRC,
+					PATTERN_DST, PATTERN_COPY, 0,
+					interleave);
 
 			if (error_count) {
-				printf("\tBuffer verification failed with %d errors\n", error_count);
+				printf(
+						"\tDestination buffer verification failed with %d errors\n",
+						error_count);
 				break;
-			} else
-				printf("\tBuffer verification OK!\n");
-		} else
+			} else {
+				if (debug) {
+					printf("\ttDestination buffer verification OK!\n");
+				}
+			}
+		} else {
 			printf("\tBuffer verification is turned off!\n");
+		}
 
 		time = timediff(wr_starttime, wr_endtime);
-		totaltime = ((double) time.tv_sec + (time.tv_nsec / 1000000000.0));
-		if (sync != RIO_DIRECTIO_TRANSFER_SYNC)
+		totaltime =
+				((double)time.tv_sec
+						+ (time.tv_nsec / 1000000000.0));
+		if (sync != RIO_DIRECTIO_TRANSFER_SYNC) {
 			printf("\t\tWR time: %4f s\n", totaltime);
-		else
-			printf("\t\tWR time: %4f s @ %4.2f MB/s\n",
-				totaltime, (len/totaltime)/(1024*1024));
-		totaltime = ((double) rd_time.tv_sec + (rd_time.tv_nsec / 1000000000.0));
-		if (sync != RIO_DIRECTIO_TRANSFER_SYNC)
+		} else {
+			printf("\t\tWR time: %4f s @ %4.2f MB/s\n", totaltime,
+					(len / totaltime) / (1024 * 1024));
+		}
+
+		totaltime = ((double)rd_time.tv_sec
+				+ (rd_time.tv_nsec / 1000000000.0));
+
+		if (sync != RIO_DIRECTIO_TRANSFER_SYNC) {
 			printf("\t\tRD time: %4f s\n", totaltime);
-		else
-			printf("\t\tRD time: %4f s @ %4.2f MB/s\n",
-				totaltime, (len/totaltime)/(1024*1024));
+		} else {
+			printf("\t\tRD time: %4f s @ %4.2f MB/s\n", totaltime,
+					(len / totaltime) / (1024 * 1024));
+		}
+
 		time = timediff(wr_starttime, rd_endtime);
-		totaltime = ((double) time.tv_sec + (time.tv_nsec / 1000000000.0));
+		totaltime =
+				((double)time.tv_sec
+						+ (time.tv_nsec / 1000000000.0));
 		printf("\t\tFull Cycle time: %4f s\n", totaltime);
 	} /// - Repeat if loop_count > 1
+
 out:
 	/** * Free source and destination buffers */
 	dmatest_buf_free(mport_hnd, buf_dst, tbuf_size,
-				kbuf_mode?&dst_handle:NULL);
+			kbuf_mode ? &dst_handle : NULL);
+
 out_dst:
 	dmatest_buf_free(mport_hnd, buf_src, tbuf_size,
-				kbuf_mode?&src_handle:NULL);
+			kbuf_mode ? &src_handle : NULL);
+
 out_src:
 	return ret;
+
 }
 
 
@@ -884,24 +1019,23 @@ int local_parse_dist_size(char *arg, uint16_t *dist, uint16_t *size)
 	char *saveptr;
 	char *distTok;
 	char *sizeTok;
-	int rc = EXIT_SUCCESS;
 
 	sizeTok = strtok_r(arg, ",", &saveptr);
 	distTok = strtok_r(NULL, ",", &saveptr);
 	if (distTok == NULL) {
 		distTok = sizeTok;
 	}
+
 	if (tok_parse_us(distTok, dist, 0)) {
-		printf(TOK_ERR_US_HEX_MSG_FMT,
-			"source distance");
+		printf(TOK_ERR_US_HEX_MSG_FMT, "source distance");
 		return (EXIT_FAILURE);
 	}
+
 	if (tok_parse_us(sizeTok, size, 0)) {
-		printf(TOK_ERR_US_HEX_MSG_FMT,
-			"source size");
+		printf(TOK_ERR_US_HEX_MSG_FMT, "source size");
 		return (EXIT_FAILURE);
 	}
-	return rc;
+	return (EXIT_SUCCESS);
 }
 
 /**
@@ -927,22 +1061,22 @@ int main(int argc, char** argv)
 	uint64_t loc_addr = RIOMP_MAP_ANY_ADDR;
 	enum riomp_dma_directio_transfer_sync sync = RIO_DIRECTIO_TRANSFER_SYNC;
 	static const struct option options[] = {
-		{ "destid", required_argument, NULL, 'D' },
-		{ "taddr",  required_argument, NULL, 'A' },
-		{ "size",   required_argument, NULL, 'S' },
-		{ "offset", required_argument, NULL, 'O' },
-		{ "align",  required_argument, NULL, 'a' },
-		{ "repeat", required_argument, NULL, 'T' },
-		{ "ibwin",  required_argument, NULL, 'I' },
-		{ "ibbase", required_argument, NULL, 'R' },
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "laddr",  required_argument, NULL, 'L' },
-		{ "faf",    no_argument, NULL, 'F' },
-		{ "async",  no_argument, NULL, 'Y' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
-		{ "sinterleave", required_argument, NULL, 'n'},
-		{ "dinterleave", required_argument, NULL, 'N'},
+			{ "destid", required_argument, NULL, 'D' },
+			{ "taddr",  required_argument, NULL, 'A' },
+			{ "size",   required_argument, NULL, 'S' },
+			{ "offset", required_argument, NULL, 'O' },
+			{ "align",  required_argument, NULL, 'a' },
+			{ "repeat", required_argument, NULL, 'T' },
+			{ "ibwin",  required_argument, NULL, 'I' },
+			{ "ibbase", required_argument, NULL, 'R' },
+			{ "mport",  required_argument, NULL, 'M' },
+			{ "laddr",  required_argument, NULL, 'L' },
+			{ "faf",    no_argument, NULL, 'F' },
+			{ "async",  no_argument, NULL, 'Y' },
+			{ "debug",  no_argument, NULL, 'd' },
+			{ "help",   no_argument, NULL, 'h' },
+			{ "sinterleave", required_argument, NULL, 'n'},
+			{ "dinterleave", required_argument, NULL, 'N'},
 	};
 
 	struct riomp_mgmt_mport_properties prop;
@@ -972,13 +1106,15 @@ int main(int argc, char** argv)
 			break;
 		case 'L':
 			if (tok_parse_ull(optarg, &loc_addr, 0)) {
-				printf(TOK_ERR_ULL_HEX_MSG_FMT, "Local address");
+				printf(TOK_ERR_ULL_HEX_MSG_FMT,
+						"Local address");
 				return (EXIT_FAILURE);
 			}
 			break;
 		case 'a':
 			if (tok_parse_us(optarg, &align, 0)) {
-				printf(TOK_ERR_US_HEX_MSG_FMT, "Data alignment");
+				printf(TOK_ERR_US_HEX_MSG_FMT,
+						"Data alignment");
 				return (EXIT_FAILURE);
 			}
 			break;
@@ -986,7 +1122,7 @@ int main(int argc, char** argv)
 			clear_buf = true;
 			break;
 		case 'D':
-			if (tok_parse_did(optarg, &tgt_destid, 0)) {
+			if (tok_parse_did(optarg, &tgt_did_val, 0)) {
 				printf(TOK_ERR_DID_MSG_FMT);
 				exit(EXIT_FAILURE);
 			}
@@ -1090,25 +1226,32 @@ int main(int argc, char** argv)
 			debug = 1;
 			break;
 		case 'n':
-			/* source interleave parameter is <ssize>,<sdist>.  We will also accept a single digit in which case both size and
-			   distance will be the same.
-                        */
-			if (local_parse_dist_size(optarg, &interleave.sssize, &interleave.ssdist) != EXIT_SUCCESS) {
+			// source interleave parameter is <ssize>,<sdist>.
+			// We will also accept a single digit in which case
+			// both size and distance will be the same.
+			if (EXIT_SUCCESS
+					!= local_parse_dist_size(optarg,
+							&interleave.sssize,
+							&interleave.ssdist)) {
 				return (EXIT_FAILURE);
 			}
 			break;
 		case 'N':
-			/* destination interleave parameter is <dsize>,<ddist>.  We will also accept a single digit in which case both size and
-			   distance will be the same.
-                        */
-			if (local_parse_dist_size(optarg, &interleave.dssize, &interleave.dsdist) != EXIT_SUCCESS) {
+			// destination interleave parameter is <dsize>,<ddist>.
+			// We will also accept a single digit in which case
+			// both size anddistance will be the same.
+			if (EXIT_SUCCESS
+					!= local_parse_dist_size(optarg,
+							&interleave.dssize,
+							&interleave.dsdist)) {
 				return (EXIT_FAILURE);
 			}
 			break;
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -1122,7 +1265,7 @@ int main(int argc, char** argv)
 	ret = riomp_mgmt_mport_create_handle(mport_id, 0, &mport_hnd);
 	if (ret < 0) {
 		printf("DMA Test: unable to open mport%d device err=%d\n",
-			mport_id, ret);
+				mport_id, ret);
 		exit(EXIT_FAILURE);
 	}
 
@@ -1133,8 +1276,9 @@ int main(int argc, char** argv)
 			align = prop.dma_align;
 			max_sge = prop.dma_max_sge;
 			max_size = prop.dma_max_size;
-		} else
+		} else {
 			has_dma = 0;
+		}
 
 		if (prop.link_speed == 0) {
 			printf("SRIO link is down. Test aborted.\n");
@@ -1148,25 +1292,43 @@ int main(int argc, char** argv)
 
 	if (inbound_mode) {
 		printf("+++ RapidIO Inbound Window Mode +++\n");
-		printf("\tmport%d ib_size=0x%x PID:%d\n",
-			mport_id, ibwin_size, (int)getpid());
-		if (loc_addr != RIOMP_MAP_ANY_ADDR)
-			printf("\tloc_addr=0x%llx\n", (unsigned long long)loc_addr);
+		printf("\tmport%d ib_size=0x%x PID:%d\n", mport_id, ibwin_size,
+				(int)getpid());
+		if (loc_addr != RIOMP_MAP_ANY_ADDR) {
+			printf("\tloc_addr=0x%llx\n",
+					(unsigned long long)loc_addr);
+		}
 
 		do_ibwin_test(rio_base, ibwin_size, loc_addr, verify);
 	} else if (has_dma) {
 		printf("+++ RapidIO DMA Test +++\n");
-		printf("\tmport%d destID=%d rio_addr=0x%llx align=%d repeat=%d PID:%d\n",
-			mport_id, tgt_destid, (unsigned long long)tgt_addr, align, repeat, (int)getpid());
-		printf("\tsync=%d (%s)\n", sync,
-			(sync == RIO_DIRECTIO_TRANSFER_SYNC)?"SYNC":(sync == RIO_DIRECTIO_TRANSFER_FAF)?"FAF":"ASYNC");
-		printf("\tsrc dist: %d size: %d  dest dist: %d size: %d\n", interleave.ssdist, interleave.sssize, interleave.dsdist, interleave.dssize);
-		if (loc_addr != RIOMP_MAP_ANY_ADDR)
-			printf("\tloc_addr=0x%llx\n", (unsigned long long)loc_addr);
+		printf(
+				"\tmport%d destID=%d rio_addr=0x%llx align=%d repeat=%d PID:%d\n",
+				mport_id, tgt_did_val,
+				(unsigned long long)tgt_addr, align, repeat,
+				(int)getpid());
 
-		if (do_dma_test(do_rand, kbuf_mode, verify, repeat, sync, loc_addr, clear_buf, &interleave)) {
-		    printf("DMA test FAILED\n\n");
-		    rc = EXIT_FAILURE;
+		if (RIO_DIRECTIO_TRANSFER_SYNC == sync) {
+			printf("\tsync=%d (%s)\n", sync, "SYNC");
+		} else {
+
+			printf("\tsync=%d (%s)\n", sync,
+					(RIO_DIRECTIO_TRANSFER_FAF == sync) ?
+							"FAF" : "ASYNC");
+		}
+
+		printf("\tsrc dist: %d size: %d  dest dist: %d size: %d\n",
+				interleave.ssdist, interleave.sssize,
+				interleave.dsdist, interleave.dssize);
+		if (RIOMP_MAP_ANY_ADDR != loc_addr) {
+			printf("\tloc_addr=0x%llx\n",
+					(unsigned long long)loc_addr);
+		}
+
+		if (do_dma_test(do_rand, kbuf_mode, verify, repeat, sync,
+				loc_addr, clear_buf, &interleave)) {
+			printf("DMA test FAILED\n\n");
+			rc = EXIT_FAILURE;
 		}
 	} else {
 		printf("No DMA support. Test aborted.\n\n");

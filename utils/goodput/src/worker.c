@@ -63,12 +63,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sched.h>
 
+#include "rio_route.h"
 #include "string_util.h"
 #include "libcli.h"
 #include "rapidio_mport_mgmt.h"
 #include "rapidio_mport_sock.h"
 #include "rapidio_mport_dma.h"
-#include "riodp_mport_lib.h"
 #include "liblog.h"
 
 #include "libtime_utils.h"
@@ -84,7 +84,7 @@ void init_worker_info(struct worker *info, int first_time)
 	if (first_time) {
         	sem_init(&info->started, 0, 0);
         	sem_init(&info->run, 0, 0);
-	};
+	}
 
 	info->stat = 0;
 	info->stop_req = 0;
@@ -92,7 +92,7 @@ void init_worker_info(struct worker *info, int first_time)
 	info->wkr_thr.cpu_run = -1;
 	info->action = no_action;
 	info->action_mode = kernel_action;
-	info->did = -1;
+	info->did_val = (did_val_t)(-1);
 	
 
         info->rio_addr = 0;
@@ -147,8 +147,7 @@ void init_worker_info(struct worker *info, int first_time)
 	info->sssize = 0;
 	info->dsdist = 0;
 	info->dssize = 0;
-
-};
+}
 
 void msg_cleanup_con_skt(struct worker *info);
 void msg_cleanup_acc_skt(struct worker *info);
@@ -165,7 +164,7 @@ void shutdown_worker_thread(struct worker *info)
 		info->stop_req = 2;
 		sem_post(&info->run);
 		pthread_join(info->wkr_thr.thr, NULL);
-	};
+	}
 		
 	dma_free_ibwin(info);
 	direct_io_obwin_unmap(info);
@@ -181,11 +180,11 @@ void shutdown_worker_thread(struct worker *info)
 		if (rc) {
 			ERR("Shutdown riomp_mgmt_mport_destroy_handle rc %d:%s\n",
 					rc, strerror(errno));
-		};
-	};
+		}
+	}
 	
 	init_worker_info(info, 0);
-};
+}
 
 int getCPUCount()
 {
@@ -199,10 +198,15 @@ int getCPUCount()
 
 	while (! feof(f)) {
 		char buf[257] = {0};
-		if (NULL == fgets(buf, 256, f))
+		if (NULL == fgets(buf, 256, f)) {
 			break;
-		if (buf[0] == '\0') break;
-		if (strstr(buf, "processor\t:")) count++;
+		}
+		if (buf[0] == '\0') {
+			break;
+		}
+		if (strstr(buf, "processor\t:")) {
+			count++;
+		}
 	}
 
 	fclose(f);
@@ -212,57 +216,59 @@ int getCPUCount()
 
 int migrate_thread_to_cpu(struct thread_cpu *info)
 {
-        cpu_set_t cpuset;
-        int chk_cpu_lim = 10;
+	const struct timespec one_usec = {0, 1 * 1000};
+
+	cpu_set_t cpuset;
+	int chk_cpu_lim = 10;
 	int rc;
 
 	const int cpu_count = getCPUCount();
 
 	if (-1 == info->cpu_req) {
-        	CPU_ZERO(&cpuset);
-
-		for(int c = 0; c < cpu_count; c++) CPU_SET(c, &cpuset);
+		CPU_ZERO(&cpuset);
+		for (int c = 0; c < cpu_count; c++) {
+			CPU_SET(c, &cpuset);
+		}
 	} else {
 		if (info->cpu_req >= cpu_count) {
-			ERR("\n\tInvalid cpu %d cpu count is %d\n", info->cpu_req, cpu_count);
+			ERR("\n\tInvalid cpu %d cpu count is %d\n",
+					info->cpu_req, cpu_count);
 			return 1;
 		}
-        	CPU_ZERO(&cpuset);
-        	CPU_SET(info->cpu_req, &cpuset);
-	};
+		CPU_ZERO(&cpuset);
+		CPU_SET(info->cpu_req, &cpuset);
+	}
 
-        rc = pthread_setaffinity_np(info->thr, sizeof(cpu_set_t), &cpuset);
+	rc = pthread_setaffinity_np(info->thr, sizeof(cpu_set_t), &cpuset);
 	if (rc) {
-		ERR("pthread_setaffinity_np rc %d:%s\n",
-					rc, strerror(errno));
-                return 1;
-	};
+		ERR("pthread_setaffinity_np rc %d:%s\n", rc, strerror(errno));
+		return 1;
+	}
 
 	if (-1 == info->cpu_req) {
 		info->cpu_run = info->cpu_req;
 		return 0;
-	};
-		
-        rc = pthread_getaffinity_np(info->thr, sizeof(cpu_set_t), &cpuset);
-	if (rc) {
-		ERR("pthread_getaffinity_np rc %d:%s\n",
-					rc, strerror(errno));
-                return 1;
-	};
+	}
 
-        info->cpu_run = sched_getcpu();
-        while ((info->cpu_run != info->cpu_req) && chk_cpu_lim) {
-                usleep(1);
-                info->cpu_run = sched_getcpu();
-                chk_cpu_lim--;
-        };
+	rc = pthread_getaffinity_np(info->thr, sizeof(cpu_set_t), &cpuset);
+	if (rc) {
+		ERR("pthread_getaffinity_np rc %d:%s\n", rc, strerror(errno));
+		return 1;
+	}
+
+	info->cpu_run = sched_getcpu();
+	while ((info->cpu_run != info->cpu_req) && chk_cpu_lim) {
+		time_sleep(&one_usec);
+		info->cpu_run = sched_getcpu();
+		chk_cpu_lim--;
+	}
 	rc = info->cpu_run != info->cpu_req;
 	if (rc) {
 		ERR("Unable to schedule thread on cpu %d\n", info->cpu_req);
-                return 1;
-	};
+		return 1;
+	}
 	return rc;
-};
+}
 
 void zero_stats(struct worker *info)
 {
@@ -274,21 +280,21 @@ void zero_stats(struct worker *info)
 	info->max_iter_time = (struct timespec){0,0};
 	info->iter_time_lim = (struct timespec){0xFFFFFFFF,0xFFFFFFFF};
 
-        info->data8_tx = 0x12;
-        info->data16_tx= 0x3456;
-        info->data32_tx = 0x789abcde;
-        info->data64_tx = 0xf123456789abcdef;
+	info->data8_tx = 0x12;
+	info->data16_tx = 0x3456;
+	info->data32_tx = 0x789abcde;
+	info->data64_tx = 0xf123456789abcdef;
 
-        info->data8_rx = 0;
-        info->data16_rx = 0;
-        info->data32_rx = 0;
-        info->data64_rx = 0;
-};
+	info->data8_rx = 0;
+	info->data16_rx = 0;
+	info->data32_rx = 0;
+	info->data64_rx = 0;
+}
 
 void start_iter_stats(struct worker *info)
 {
 	clock_gettime(CLOCK_MONOTONIC, &info->iter_st_time);
-};
+}
 
 void finish_iter_stats(struct worker *info)
 {
@@ -298,7 +304,7 @@ void finish_iter_stats(struct worker *info)
 		&info->tot_iter_time, &info->min_iter_time,
 		&info->max_iter_time);
 	info->perf_iter_cnt++;	
-};
+}
 
 void direct_io_tx(struct worker *info, volatile void * volatile ptr)
 {
@@ -328,8 +334,8 @@ void direct_io_tx(struct worker *info, volatile void * volatile ptr)
 		break;
 	default:
 		break;
-	};
-};
+	}
+}
 
 void init_direct_io_rx_data(struct worker *info, void * volatile ptr )
 {
@@ -347,14 +353,14 @@ void init_direct_io_rx_data(struct worker *info, void * volatile ptr )
 		break;
 	default:
 		break;
-	};
-};
+	}
+}
 
 int direct_io_wait_for_change(struct worker *info)
 {
 	volatile void * volatile ptr = info->ib_ptr;
 	uint64_t no_change = 1;
-	uint64_t limit = 0x100000;
+	uint64_t limit;
 
 	if ((info->action == direct_io_tx_lat) && !info->wr)
 		return 0;
@@ -381,11 +387,11 @@ int direct_io_wait_for_change(struct worker *info)
 			default:
 				no_change = 0;
 				break;
-			};
+			}
 		} while (no_change && --limit);
-	};
+	}
 	return 0;
-};
+}
 
 void incr_direct_io_data(struct worker *info)
 {
@@ -393,19 +399,19 @@ void incr_direct_io_data(struct worker *info)
         info->data16_tx++;
         info->data32_tx++;
         info->data64_tx++;
-};
+}
 
 int direct_io_obwin_map(struct worker *info)
 {
 	int rc;
 
-	rc = riomp_dma_obwin_map(info->mp_h, info->did, info->rio_addr, 
+	rc = riomp_dma_obwin_map(info->mp_h, info->did_val, info->rio_addr,
 					info->ob_byte_cnt, &info->ob_handle);
 	if (rc) {
 		ERR("FAILED: riomp_dma_obwin_map rc %d:%s\n",
 					rc, strerror(errno));
 		goto exit;
-	};
+	}
 
 	info->ob_valid = 1;
 
@@ -416,7 +422,7 @@ int direct_io_obwin_map(struct worker *info)
 					rc, strerror(errno));
 exit:
 	return rc;
-};
+}
 
 void direct_io_obwin_unmap(struct worker *info)
 {
@@ -429,32 +435,32 @@ void direct_io_obwin_unmap(struct worker *info)
 		if (rc)
 			ERR("FAILED: riomp_dma_unmap_memory rc %d:%s\n",
 						rc, strerror(errno));
-	};
+	}
 
 	if (info->ob_handle) {
 		rc = riomp_dma_obwin_free(info->mp_h, &info->ob_handle);
 		if (rc)
 			ERR("FAILED: riomp_dma_obwin_free rc %d:%s\n",
 						rc, strerror(errno));
-	};
+	}
 
 	info->ob_valid = 0;
 	info->ob_handle = 0;
 	info->ob_byte_cnt = 0;
 	info->ob_ptr = NULL;
-};
+}
 
 void direct_io_goodput(struct worker *info)
 {
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, window size or acc_size is 0\n");
 		return;
-	};
+	}
 
 	if (!info->ob_byte_cnt) {
 		ERR("FAILED: ob_byte_cnt is 0\n");
 		return;
-	};
+	}
 
 	if (direct_io_obwin_map(info))
 		goto exit;
@@ -473,37 +479,37 @@ void direct_io_goodput(struct worker *info)
 			ptr = (void *)((uint64_t)info->ob_ptr + cnt);
 
 			direct_io_tx(info, ptr);
-		};
+		}
 
 		info->perf_byte_cnt += info->byte_cnt;
 		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
 		incr_direct_io_data(info);
-	};
+	}
 exit:
 	direct_io_obwin_unmap(info);
-};
+}
 					
 void direct_io_tx_latency(struct worker *info)
 {
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, window size or acc_size is 0\n");
 		return;
-	};
+	}
 
 	if (!info->ob_byte_cnt) {
 		ERR("FAILED: ob_byte_cnt is 0\n");
 		return;
-	};
+	}
 
 	if (info->byte_cnt != info->acc_size) {
 		ERR("WARNING: access size == byte count for latency\n");
 		info->byte_cnt = info->acc_size;
-	};
+	}
 
 	if (!info->ib_valid && info->wr) {
 		ERR("FAILED: ibwin is not valid!\n");
 		return;
-	};
+	}
 		
 	if (direct_io_obwin_map(info))
 		goto exit;
@@ -517,7 +523,7 @@ void direct_io_tx_latency(struct worker *info)
 		if (info->wr) {
 			init_direct_io_rx_data(info, info->ob_ptr);
 			init_direct_io_rx_data(info, info->ib_ptr);
-		};
+		}
 
 		start_iter_stats(info);
 
@@ -529,32 +535,32 @@ void direct_io_tx_latency(struct worker *info)
 		info->perf_byte_cnt += info->byte_cnt;
 		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
 		incr_direct_io_data(info);
-	};
+	}
 exit:
 	direct_io_obwin_unmap(info);
-};
+}
 					
 void direct_io_rx_latency(struct worker *info)
 {
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, window size or acc_size is 0\n");
 		return;
-	};
+	}
 
 	if (!info->ob_byte_cnt) {
 		ERR("FAILED: ob_byte_cnt is 0\n");
 		return;
-	};
+	}
 
 	if (info->byte_cnt != info->acc_size) {
 		ERR("WARNING: access size == byte count for latency\n");
 		info->byte_cnt = info->acc_size;
-	};
+	}
 
 	if (!info->ib_valid) {
 		ERR("FAILED: ibwin is not valid!\n");
 		return;
-	};
+	}
 
 	if (direct_io_obwin_map(info))
 		goto exit;
@@ -567,11 +573,11 @@ void direct_io_rx_latency(struct worker *info)
 			goto exit;
 		direct_io_tx(info, info->ob_ptr);
 		incr_direct_io_data(info);
-	};
+	}
 exit:
 	direct_io_obwin_unmap(info);
 
-};
+}
 					
 #define ADDR_L(x,y) ((uint64_t)((uint64_t)x + (uint64_t)y))
 #define ADDR_P(x,y) ((void *)((uint64_t)x + (uint64_t)y))
@@ -589,7 +595,7 @@ int alloc_dma_tx_buffer(struct worker *info)
 			ERR("FAILED: riomp_dma_dbuf_alloc rc %d:%s\n",
 						rc, strerror(errno));
 			goto exit;
-		};
+		}
 		info->rdma_ptr = NULL;
 		rc = riomp_dma_map_memory(info->mp_h, info->rdma_buff_size,
 					info->rdma_kbuff, &info->rdma_ptr);
@@ -597,7 +603,7 @@ int alloc_dma_tx_buffer(struct worker *info)
 			ERR("FAILED: riomp_dma_map_memory rc %d:%s\n",
 						rc, strerror(errno));
 			goto exit;
-		};
+		}
 	} else {
 		info->rdma_ptr = malloc(info->rdma_buff_size);
 		if (NULL == info->rdma_ptr) {
@@ -605,12 +611,12 @@ int alloc_dma_tx_buffer(struct worker *info)
 			ERR("FAILED: Could not allocate local memory!\n");
 			goto exit;
 		}
-	};
+	}
 
 	return 0;
 exit:
 	return rc;
-};
+}
 
 void dealloc_dma_tx_buffer(struct worker *info)
 {
@@ -619,18 +625,18 @@ void dealloc_dma_tx_buffer(struct worker *info)
 			riomp_dma_unmap_memory(info->rdma_buff_size,
 				info->rdma_ptr);
 			info->rdma_ptr = NULL;
-		};
+		}
 		if (info->rdma_kbuff) {
 			riomp_dma_dbuf_free(info->mp_h, &info->rdma_kbuff);
 			info->rdma_kbuff = 0;
-		};
+		}
 	} else {
 		if (NULL != info->rdma_ptr) {
 			free(info->rdma_ptr);
 			info->rdma_ptr = NULL;
-		};
-	};
-};
+		}
+	}
+}
 
 int single_dma_access(struct worker *info, uint64_t offset)
 {
@@ -645,7 +651,7 @@ int single_dma_access(struct worker *info, uint64_t offset)
 	do {
 		if (info->use_kbuf && info->wr)
 			dma_rc = riomp_dma_write_d(info->mp_h,
-						info->did,
+						info->did_val,
 						ADDR_L(info->rio_addr, offset),
 						info->rdma_kbuff,
 						offset,
@@ -656,7 +662,7 @@ int single_dma_access(struct worker *info, uint64_t offset)
 
 		if (info->use_kbuf && !info->wr)
 			dma_rc = riomp_dma_read_d(info->mp_h,
-						info->did,
+						info->did_val,
 						ADDR_L(info->rio_addr, offset),
 						info->rdma_kbuff,
 						offset,
@@ -666,7 +672,7 @@ int single_dma_access(struct worker *info, uint64_t offset)
 
 		if (!info->use_kbuf && info->wr)
 			dma_rc = riomp_dma_write(info->mp_h,
-						info->did,
+						info->did_val,
 						ADDR_L(info->rio_addr, offset),
 						ADDR_P(info->rdma_ptr, offset),
 						info->acc_size,
@@ -676,7 +682,7 @@ int single_dma_access(struct worker *info, uint64_t offset)
 
 		if (!info->use_kbuf && info->wr)
 			dma_rc = riomp_dma_read(info->mp_h,
-						info->did,
+						info->did_val,
 						ADDR_L(info->rio_addr, offset),
 						ADDR_P(info->rdma_ptr, offset),
 						info->acc_size,
@@ -685,7 +691,7 @@ int single_dma_access(struct worker *info, uint64_t offset)
 	} while ((EINTR == -dma_rc) || (EBUSY == -dma_rc) || (EAGAIN == -dma_rc));
 
 	return dma_rc;
-};
+}
 
 void dma_goodput(struct worker *info)
 {
@@ -696,23 +702,23 @@ void dma_goodput(struct worker *info)
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, byte_cnd or access size is 0!\n");
 		return;
-	};
+	}
 
 	if (!info->rdma_buff_size) {
 		ERR("FAILED: rdma_buff_size is 0!\n");
 		return;
-	};
+	}
 
 	if (dma_tx_lat == info->action) {
 		if ((!info->ib_valid || (NULL == info->ib_ptr)) && info->wr) {
 			ERR("FAILED: Must do IBA before measuring latency.\n");
 			return;
-		};
+		}
 		if (info->byte_cnt != info->acc_size)  {
 			ERR("WARNING: For latency, acc_size = byte count.\n");
-		};
+		}
 		info->acc_size = info->byte_cnt;
-	};
+	}
 
 
 	if (alloc_dma_tx_buffer(info))
@@ -732,7 +738,7 @@ void dma_goodput(struct worker *info)
 		if (dma_tx_lat == info->action) {
 			start_iter_stats(info);
 			*rx_flag = info->perf_iter_cnt + 1;
-		};
+		}
 		*tx_flag = info->perf_iter_cnt;
 
 		/* Note: when info->action == dma_tx_lat, the loop below
@@ -746,11 +752,10 @@ void dma_goodput(struct worker *info)
 			ts_now_mark(&info->meas_ts, 5);
 			do {
 				dma_rc = single_dma_access(info, cnt);
-				if (dma_rc < 0)
+				if (dma_rc < 0) {
 					sleep(0);
-// FIXME: when libmport is fixed to return negative return codes,
-// this statement should be fixed to check -dma_rc
-			} while  ((EBUSY == dma_rc) && 
+				}
+			} while  ((-EBUSY == dma_rc) && 
                         (RIO_DIRECTIO_TRANSFER_FAF == info->dma_sync_type));
 
 			if ((RIO_DIRECTIO_TRANSFER_ASYNC == info->dma_sync_type)
@@ -762,14 +767,14 @@ void dma_goodput(struct worker *info)
 				} while ((EINTR == -dma_rc)
 					|| (EBUSY == -dma_rc)
 					|| (EAGAIN == -dma_rc));
-			};
+			}
 			ts_now_mark(&info->meas_ts, 555);
 			if (dma_rc) {
 				ERR("FAILED: dma transfer rc %d:%s\n",
 						dma_rc, strerror(errno));
 				goto exit;
-			};
-		};
+			}
+		}
 		if (dma_tx_lat == info->action) {
 			uint64_t dly = 1000000000;
 			uint64_t st_dlay = dly;
@@ -778,7 +783,7 @@ void dma_goodput(struct worker *info)
 			if (info->wr) {
 				while (dly && (*rx_flag != iter_cnt_as_byte))
 					dly--;
-			};
+			}
 			
 			finish_iter_stats(info);
 
@@ -789,17 +794,17 @@ void dma_goodput(struct worker *info)
 				ERR("FAILED: No response in %" PRIu64 " checks\n",
 					st_dlay);
 				break;
-			};
+			}
 		} else {
 			info->perf_iter_cnt++;
-		};
+		}
 		info->perf_byte_cnt += info->byte_cnt;
 		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
 
-	};
+	}
 exit:
 	dealloc_dma_tx_buffer(info);
-};
+}
 
 void dma_tx_num_cmd(struct worker *info)
 {
@@ -809,12 +814,12 @@ void dma_tx_num_cmd(struct worker *info)
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, byte_cnd or access size is 0!\n");
 		return;
-	};
+	}
 
 	if (!info->rdma_buff_size) {
 		ERR("FAILED: rdma_buff_size is 0!\n");
 		return;
-	};
+	}
 
 	if (alloc_dma_tx_buffer(info))
 		goto exit;
@@ -832,7 +837,7 @@ void dma_tx_num_cmd(struct worker *info)
 			return;
 		}
 		ts_now_mark(&info->meas_ts, 555);
-	};
+	}
 
 	clock_gettime(CLOCK_MONOTONIC, &info->end_time);
 
@@ -841,7 +846,7 @@ void dma_tx_num_cmd(struct worker *info)
 	}
 exit:
 	dealloc_dma_tx_buffer(info);
-};
+}
 	
 void dma_rx_latency(struct worker *info)
 {
@@ -851,21 +856,21 @@ void dma_rx_latency(struct worker *info)
 	if (!info->rio_addr || !info->byte_cnt || !info->acc_size) {
 		ERR("FAILED: rio_addr, byte_cnd or access size is 0!\n");
 		return;
-	};
+	}
 
 	if (!info->rdma_buff_size) {
 		ERR("FAILED: rdma_buff_size is 0!\n");
 		return;
-	};
+	}
 
 	if (!info->ib_valid || (NULL == info->ib_ptr))  {
 		ERR("FAILED: Must do IBA before measuring latency.\n");
 		return;
-	};
+	}
 
 	if (info->byte_cnt != info->acc_size)  {
 		ERR("WARNING: For latency, acc_size = byte count.\n");
-	};
+	}
 
 	if (alloc_dma_tx_buffer(info))
 		goto exit;
@@ -884,8 +889,11 @@ void dma_rx_latency(struct worker *info)
 
 		iter_cnt_as_byte = info->perf_iter_cnt;
 		*tx_flag = iter_cnt_as_byte;
-		while ((*rx_flag != iter_cnt_as_byte) && !info->stop_req)
-			{};
+		//@sonar:off - c:EmptyCompoundStatement
+		while ((*rx_flag != iter_cnt_as_byte) && !info->stop_req) {
+
+		}
+		//@sonar:on
 		*rx_flag = info->perf_iter_cnt + 2;
 
 		dma_rc = single_dma_access(info, 0);
@@ -895,13 +903,11 @@ void dma_rx_latency(struct worker *info)
 			ERR("FAILED: dma transfer rc %d:%s\n",
 					-dma_rc, strerror(errno));
 			goto exit;
-		};
-	};
+		}
+	}
 exit:
 	dealloc_dma_tx_buffer(info);
-};
-
-#define FOUR_KB 4096
+}
 
 int alloc_msg_tx_rx_buffs(struct worker *info)
 {
@@ -912,10 +918,12 @@ int alloc_msg_tx_rx_buffs(struct worker *info)
 		ERR("FAILED: riomp_sock_request_send_buffer rc %d:%s\n",
 			rc, strerror(errno));
 		return rc;
-	};
+	}
 
-	if (NULL == info->sock_rx_buf)
-		info->sock_rx_buf = malloc(FOUR_KB);
+	if (NULL == info->sock_rx_buf) {
+		info->sock_rx_buf = (rapidio_mport_socket_msg *) malloc(
+				sizeof(rapidio_mport_socket_msg));
+	}
 
 	if (NULL == info->sock_rx_buf) {
 		free(info->sock_tx_buf);
@@ -923,7 +931,7 @@ int alloc_msg_tx_rx_buffs(struct worker *info)
 		return 1;
 	}
 	return 0;
-};
+}
 
 void msg_cleanup_con_skt(struct worker *info)
 {
@@ -936,7 +944,7 @@ void msg_cleanup_con_skt(struct worker *info)
 		if (rc)
 			ERR("riomp_sock_release_receive_buffer rc con_skt %d:%s\n",
 				rc, strerror(errno));
-	};
+	}
 
 	if (info->sock_tx_buf) {
 		rc = riomp_sock_release_send_buffer(info->con_skt, 
@@ -945,8 +953,8 @@ void msg_cleanup_con_skt(struct worker *info)
 		if (rc) {
 			ERR("riomp_sock_release_send_buffer rc con_skt %d:%s\n",
 				rc, strerror(errno));
-		};
-	};
+		}
+	}
 
 	if (2 == info->con_skt_valid) {
 		rc = riomp_sock_close(&info->con_skt);
@@ -954,56 +962,52 @@ void msg_cleanup_con_skt(struct worker *info)
 		if (rc) {
 			ERR("riomp_sock_close rc con_skt %d:%s\n",
 					rc, strerror(errno));
-		};
-	};
+		}
+	}
 	info->con_skt_valid = 0;
 
-};
+}
 
-void msg_cleanup_acc_skt(struct worker *info) {
+void msg_cleanup_acc_skt(struct worker *info)
+{
+	int rc;
 
 	if (info->acc_skt_valid) {
-		int rc = riomp_sock_close(&info->acc_skt);
+		rc = riomp_sock_close(&info->acc_skt);
 		if (rc)
 			ERR("riomp_sock_close acc_skt rc %d:%s\n",
 					rc, strerror(errno));
 		info->acc_skt_valid = 0;
-	};
-};
+	}
+}
 
 void msg_cleanup_mb(struct worker *info)
 {
+	int rc;
+
 	if (info->mb_valid) {
-        	int rc = riomp_sock_mbox_destroy_handle(&info->mb);
+		rc = riomp_sock_mbox_destroy_handle(&info->mb);
 		if (rc)
 			ERR("FAILED: riomp_sock_mbox_destroy_handle rc %d:%s\n",
 					rc, strerror(errno));
 		info->mb_valid = 0;
-	};
-};
+	}
+}
 
 int send_resp_msg(struct worker *info)
 {
-	int rc;
 	const struct timespec ten_usec = {0, 10 * 1000};
-	nanosleep(&ten_usec, NULL);
+	int rc;
+
+	time_sleep(&ten_usec);
 	errno = 0;
-
-	do {
-		rc = riomp_sock_send(info->con_skt, info->sock_tx_buf,
-					info->msg_size);
-
-		if (rc && (errno == EBUSY)) {
-			nanosleep(&ten_usec, NULL);
-			break;
-		};
-	} while (((errno == ETIME) || (errno == EINTR) || (errno == EBUSY) ||
-		(errno == EAGAIN)) && rc && !info->stop_req);
-
-	if (rc)
+	rc = riomp_sock_send(info->con_skt, info->sock_tx_buf, info->msg_size,
+			&info->stop_req);
+	if (rc) {
 		ERR("FAILED: riomp_sock_send rc %d:%s\n", rc, strerror(errno));
+	}
 	return rc;
-};
+}
 
 void msg_rx_goodput(struct worker *info)
 {
@@ -1012,69 +1016,68 @@ void msg_rx_goodput(struct worker *info)
 	if (info->mb_valid || info->acc_skt_valid || info->con_skt_valid) {
 		ERR("FAILED: mailbox, access socket, or con socket in use.\n");
 		return;
-	};
+	}
 
 	if (!info->sock_num) {
 		ERR("FAILED: Socket number cannot be 0.\n");
 		return;
-	};
+	}
 
-        rc = riomp_sock_mbox_create_handle(mp_h_num, 0, &info->mb);
+	rc = riomp_sock_mbox_create_handle(mp_h_num, 0, &info->mb);
 	if (rc) {
 		ERR("FAILED: riomp_sock_mbox_create_handle rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->mb_valid = 1;
 
-        rc = riomp_sock_socket(info->mb, &info->acc_skt);
+	rc = riomp_sock_socket(info->mb, &info->acc_skt);
 	if (rc) {
 		ERR("FAILED: riomp_sock_socket acc_skt rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->acc_skt_valid = 1;
 
-        rc = riomp_sock_bind(info->acc_skt, info->sock_num);
+	rc = riomp_sock_bind(info->acc_skt, info->sock_num);
 	if (rc) {
 		ERR("FAILED: riomp_sock_bind rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
-        rc = riomp_sock_listen(info->acc_skt);
+	rc = riomp_sock_listen(info->acc_skt);
 	if (rc) {
 		ERR("FAILED: riomp_sock_listen rc %d:%s\n", rc, strerror(errno));
 		return;
-	};
+	}
 
 	while (!info->stop_req) {
 		int rc;
 
 		if (!info->con_skt_valid) {
-                        rc = riomp_sock_socket(info->mb, &info->con_skt);
+			rc = riomp_sock_socket(info->mb, &info->con_skt);
 			if (rc) {
 				ERR("FAILED: riomp_sock_socket con_skt rc %d:%s\n",
 					rc, strerror(errno));
 				goto exit;
-			};
+			}
 			info->con_skt_valid = 1;
-		};
+		}
 
 		rc = alloc_msg_tx_rx_buffs(info);
 		if (rc)
 			break;
 
-                rc = riomp_sock_accept(info->acc_skt, &info->con_skt, 1000);
-                if (rc) {
-                        if ((errno == ETIME) || (errno == EINTR))
-                                continue;
-			ERR("FAILED: riomp_sock_accept rc %d:%s\n",
-				rc, strerror(errno));
-                        break;
-                };
+		rc = riomp_sock_accept(info->acc_skt, &info->con_skt, 1000,
+				&info->stop_req);
+		if (rc) {
+			ERR("FAILED: riomp_sock_accept rc %d:%s\n", rc,
+					strerror(errno));
+			break;
+		}
 
 		info->con_skt_valid = 2;
 
@@ -1083,128 +1086,123 @@ void msg_rx_goodput(struct worker *info)
 
 		while (!rc && !info->stop_req) {
 			rc = riomp_sock_receive(info->con_skt,
-				&info->sock_rx_buf, FOUR_KB, 1000);
-
-                	if (rc) {
-                        	if ((errno == ETIME) || (errno == EINTR)) {
-					rc = 0;
-                                	continue;
-				};
-                        	break;
-                	};
-			info->perf_msg_cnt++;
-			if ((message_rx_lat == info->action) ||
-			   		(message_rx_oh == info->action)) {
-				if (send_resp_msg(info))
-					break;
+				&info->sock_rx_buf,
+				1000,
+				&info->stop_req);
+			if (rc) {
+				break;
 			}
+
+			info->perf_msg_cnt++;
+			//@sonar:off - Collapsible "if" statements should be merged
+			if ((message_rx_lat == info->action)
+					|| (message_rx_oh == info->action)) {
+				if (send_resp_msg(info)) {
+					break;
+				}
+			}
+			//@sonar:on
 			clock_gettime(CLOCK_MONOTONIC, &info->end_time);
-		};
+		}
 		msg_cleanup_con_skt(info);
-        };
+	}
 exit:
 	msg_cleanup_con_skt(info);
 	msg_cleanup_acc_skt(info);
 	msg_cleanup_mb(info);
 
-};
+}
 
 void msg_tx_goodput(struct worker *info)
 {
+	const struct timespec ten_usec = {0, 10 * 1000};
 	int rc;
 
 	if (info->mb_valid || info->acc_skt_valid || info->con_skt_valid) {
 		ERR("FAILED: mailbox, access socket, or con socket in use.\n");
 		return;
-	};
+	}
 
 	if (!info->sock_num) {
 		ERR("FAILED: Socket number cannot be 0.\n");
 		return;
-	};
+	}
 
-        rc = riomp_sock_mbox_create_handle(mp_h_num, 0, &info->mb);
+	rc = riomp_sock_mbox_create_handle(mp_h_num, 0, &info->mb);
 	if (rc) {
 		ERR("FAILED: riomp_sock_mbox_create_handle rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->mb_valid = 1;
 
-        rc = riomp_sock_socket(info->mb, &info->con_skt);
+	rc = riomp_sock_socket(info->mb, &info->con_skt);
 	if (rc) {
 		ERR("FAILED: riomp_sock_socket rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->con_skt_valid = 1;
 
-        rc = riomp_sock_connect(info->con_skt, info->did, info->sock_num);
+	rc = riomp_sock_connect(info->con_skt, info->did_val, info->sock_num,
+			&info->stop_req);
 	if (rc) {
 		ERR("FAILED: riomp_sock_connect rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->con_skt_valid = 2;
 
-	rc = alloc_msg_tx_rx_buffs(info);
-
+	alloc_msg_tx_rx_buffs(info);
 	zero_stats(info);
 	clock_gettime(CLOCK_MONOTONIC, &info->st_time);
 
 	while (!info->stop_req) {
-		const struct timespec ten_usec = {0, 10 * 1000};
-		nanosleep(&ten_usec, NULL);
+		time_sleep(&ten_usec);
 		if (message_tx_lat == info->action)
 			start_iter_stats(info);
 
 		rc = riomp_sock_send(info->con_skt,
-				info->sock_tx_buf, info->msg_size);
+				info->sock_tx_buf, info->msg_size, &info->stop_req);
 
-                if (rc) {
-                        if ((errno == ETIME) || (errno == EINTR))
-                                continue;
-                        if (errno == EBUSY) {
-				nanosleep(&ten_usec, NULL);
-                                continue;
-			};
-			ERR("FAILED: riomp_sock_send rc %d:%s\n",
-				rc, strerror(errno));
-                        goto exit;
-                };
+		if (rc) {
+			ERR("FAILED: riomp_sock_send rc %d:%s\n", rc,
+					strerror(errno));
+			goto exit;
+		}
 
 		if (message_tx_lat == info->action) {
 			rc = 1;
 			while (rc && !info->stop_req) {
 				rc = riomp_sock_receive(info->con_skt,
-					&info->sock_rx_buf, FOUR_KB, 1000);
-
-                		if (rc) {
-                        		if ((errno == ETIME) ||
-							(errno == EINTR)) {
-                                		continue;
-					};
+						&info->sock_rx_buf, 1000,
+						&info->stop_req);
+				if (rc) {
+					if ((errno == ETIME)
+							|| (errno == EINTR)) {
+						continue;
+					}
 					ERR(
-					"FAILED: riomp_sock_receive rc %d:%s\n",
-						rc, strerror(errno));
-                        		goto exit;
-                		};
-                	};
+							"FAILED: riomp_sock_receive rc %d:%s\n",
+							rc, strerror(errno));
+					goto exit;
+				}
+			}
 			finish_iter_stats(info);
-		};
+		}
 
 		info->perf_msg_cnt++;
 		info->perf_byte_cnt += info->msg_size;
 		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
-	};
+	}
 exit:
 	msg_cleanup_con_skt(info);
 	msg_cleanup_mb(info);
 
-};
+}
 
 
 void msg_tx_overhead(struct worker *info)
@@ -1214,24 +1212,23 @@ void msg_tx_overhead(struct worker *info)
 	if (info->mb_valid || info->acc_skt_valid || info->con_skt_valid) {
 		ERR("FAILED: mailbox, access socket, or con socket in use.\n");
 		return;
-	};
+	}
 
 	if (!info->sock_num) {
 		ERR("FAILED: Socket number cannot be 0.\n");
 		return;
-	};
+	}
 
 	rc = riomp_sock_mbox_create_handle(mp_h_num, 0, &info->mb);
 	if (rc) {
 		ERR("FAILED: riomp_sock_mbox_create_handle rc %d:%s\n",
 			rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->mb_valid = 1;
 
-	rc = alloc_msg_tx_rx_buffs(info);
-
+	alloc_msg_tx_rx_buffs(info);
 	zero_stats(info);
 	clock_gettime(CLOCK_MONOTONIC, &info->st_time);
 
@@ -1241,72 +1238,60 @@ void msg_tx_overhead(struct worker *info)
 			ERR("FAILED: riomp_sock_socket rc %d:%s\n",
 				rc, strerror(errno));
 			return;
-		};
+		}
 		start_iter_stats(info);
 
 		info->con_skt_valid = 1;
-		rc = riomp_sock_connect(info->con_skt, info->did, info->sock_num);
+		rc = riomp_sock_connect(info->con_skt, info->did_val,
+				info->sock_num, &info->stop_req);
 		if (rc) {
 			ERR("FAILED: riomp_sock_connect rc %d:%s\n",
 				rc, strerror(errno));
 			return;
-		};
+		}
 		info->con_skt_valid = 2;
 
-		rc = 1;
-		while (rc && !info->stop_req) {
-			rc = riomp_sock_send(info->con_skt,
-					info->sock_tx_buf, info->msg_size);
-
-			if (rc) {
-				if ((errno == ETIME) || (errno == EINTR))
-					continue;
-				if (errno == EBUSY) {
-					const struct timespec ten_usec = {0, 10 * 1000};
-					nanosleep(&ten_usec, NULL);
-					continue;
-				};
-				ERR("FAILED: riomp_sock_send rc %d:%s\n",
-					rc, strerror(errno));
-				goto exit;
-			};
-			break;
-		};
+		rc = riomp_sock_send(info->con_skt,
+				info->sock_tx_buf, info->msg_size,
+				&info->stop_req);
+		if (rc) {
+			ERR("FAILED: riomp_sock_send rc %d:%s\n",
+				rc, strerror(errno));
+			goto exit;
+		}
+		break;
 
 		rc = 1;
 		while (rc && !info->stop_req) {
 			rc = riomp_sock_receive(info->con_skt,
-				&info->sock_rx_buf, FOUR_KB, 1000);
-
+					&info->sock_rx_buf,
+					1000,
+					&info->stop_req);
 			if (rc) {
-				if ((errno == ETIME) ||
-						(errno == EINTR)) {
-					continue;
-				};
 				ERR(
 				"FAILED: riomp_sock_receive rc %d:%s\n",
 					rc, strerror(errno));
 				goto exit;
-			};
-		};
+			}
+		}
 
 		rc = riomp_sock_close(&info->con_skt);
 		info->con_skt_valid = 0;
 		if (rc) {
 			ERR("riomp_sock_close rc con_skt %d:%s\n",
 					rc, strerror(errno));
-		};
+		}
 		finish_iter_stats(info);
 
 		info->perf_msg_cnt++;
 		info->perf_byte_cnt += info->msg_size;
 		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
-	};
+	}
 exit:
 	msg_cleanup_con_skt(info);
 	msg_cleanup_mb(info);
 
-};
+}
 
 bool dma_alloc_ibwin(struct worker *info)
 {
@@ -1316,7 +1301,7 @@ bool dma_alloc_ibwin(struct worker *info)
 	if (!info->ib_byte_cnt || info->ib_valid) {
 		ERR("FAILED: window size of 0 or ibwin already exists\n");
 		return true; 
-	};
+	}
 
 	rc = riomp_dma_ibwin_map(info->mp_h, &info->ib_rio_addr,
 					info->ib_byte_cnt, &info->ib_handle);
@@ -1324,11 +1309,11 @@ bool dma_alloc_ibwin(struct worker *info)
 		ERR("FAILED: riomp_dma_ibwin_map rc %d:%s\n",
 					rc, strerror(errno));
 		return false;
-	};
+	}
 	if (info->ib_handle == 0) {
 		ERR("FAILED: riomp_dma_ibwin_map failed silently with info->ib_handle==0!\n");
 		return false;
-	};
+	}
 
 
 	info->ib_ptr = NULL;
@@ -1339,23 +1324,23 @@ bool dma_alloc_ibwin(struct worker *info)
 		ERR("FAILED: riomp_dma_map_memory rc %d:%s\n",
 					rc, strerror(errno));
 		return false;
-	};
+	}
 	if (info->ib_ptr == NULL) {
 		riomp_dma_ibwin_free(info->mp_h, &info->ib_handle);
 		ERR("FAILED: riomp_dma_map_memory failed silently with ib_ptr==NULL!\n");
 		return false;
-	};
+	}
 
 	for (i = 0; i < info->ib_byte_cnt; i += 8) {
 		uint64_t *d_ptr;
 
 		d_ptr = (uint64_t *)((uint64_t)info->ib_ptr + i);
 		*d_ptr = i + (i << 32);
-	};
+	}
 
 	info->ib_valid = 1;
 	return false;
-};
+}
 
 void dma_free_ibwin(struct worker *info)
 {
@@ -1370,20 +1355,20 @@ void dma_free_ibwin(struct worker *info)
 		if (rc)
 			ERR("riomp_dma_unmap_memory ib rc %d: %s\n",
 				rc, strerror(errno));
-	};
+	}
 
 	rc = riomp_dma_ibwin_free(info->mp_h, &info->ib_handle);
 	if (rc) {
 		ERR("FAILED: riomp_dma_ibwin_free rc %d:%s\n",
 					rc, strerror(errno));
 		return;
-	};
+	}
 
 	info->ib_valid = 0;
 	info->ib_rio_addr = 0;
 	info->ib_byte_cnt = 0;
 	info->ib_handle = 0;
-};
+}
 
 void *worker_thread(void *parm)
 {
@@ -1396,25 +1381,25 @@ void *worker_thread(void *parm)
 		if (info->wkr_thr.cpu_req != info->wkr_thr.cpu_run)
 			migrate_thread_to_cpu(&info->wkr_thr);
 
+		//@sonar:off - c:S3458
 		switch (info->action) {
-        	case direct_io: direct_io_goodput(info);
-				break;
+		case direct_io:
+			direct_io_goodput(info);
+			break;
 		case direct_io_tx_lat:
-				direct_io_tx_latency(info);
-				break;
+			direct_io_tx_latency(info);
+			break;
 		case direct_io_rx_lat:
-				direct_io_rx_latency(info);
-				break;
-        	case dma_tx:	
+			direct_io_rx_latency(info);
+			break;
+		case dma_tx:
+		case dma_tx_lat:
 			dma_goodput(info);
 			break;
-        	case dma_tx_num:	
+		case dma_tx_num:
 			dma_tx_num_cmd(info);
 			break;
-        	case dma_tx_lat:	
-			dma_goodput(info);
-			break;
-        	case dma_rx_lat:	
+		case dma_rx_lat:
 			dma_rx_latency(info);
 			break;
 		case message_tx:
@@ -1429,32 +1414,33 @@ void *worker_thread(void *parm)
 		case message_tx_oh:
 			msg_tx_overhead(info);
 			break;
-        	case alloc_ibwin:
-				dma_alloc_ibwin(info);
-				break;
-        	case free_ibwin:
-				dma_free_ibwin(info);
-				break;
-		
-        	case shutdown_worker:
+		case alloc_ibwin:
+			dma_alloc_ibwin(info);
+			break;
+		case free_ibwin:
+			dma_free_ibwin(info);
+			break;
+
+		case shutdown_worker:
 			info->stat = 0;
 			break;
 		case no_action:
 		case last_action:
 		default:
 			break;
-		};
+		}
+		//@sonar:on
 
 		if (info->stat) {
 			info->stat = 2;
 			sem_wait(&info->run);
 			info->stat = 1;
-		};
-	};
+		}
+	}
 
 	shutdown_worker_thread(info);
 	pthread_exit(parm);
-};
+}
 
 
 void start_worker_thread(struct worker *info, int new_mp_h, int cpu)
@@ -1464,22 +1450,22 @@ void start_worker_thread(struct worker *info, int new_mp_h, int cpu)
 	init_worker_info(info, 0);
 
 	if (new_mp_h) {
-        	rc = riomp_mgmt_mport_create_handle(0, 0, &info->mp_h);
-        	if (rc)
+		rc = riomp_mgmt_mport_create_handle(0, 0, &info->mp_h);
+		if (rc)
 			return;
 		info->mp_h_is_mine = 1;
 	} else {
-        	info->mp_h = mp_h;
-	};
+		info->mp_h = mp_h;
+	}
 	info->mp_num = mp_h_num;
 	info->wkr_thr.cpu_req = cpu;
 
 	rc = pthread_create(&info->wkr_thr.thr, NULL, worker_thread,
-								(void *)info);
+			(void *)info);
 
 	if (!rc)
 		sem_wait(&info->started);
-};
+}
 
 #ifdef __cplusplus
 }

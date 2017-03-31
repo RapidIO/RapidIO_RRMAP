@@ -31,11 +31,8 @@
  *************************************************************************
  */
 
-/**
- * Device id management
- */
-#ifndef DID_DID_TEST_H__
-#define DID_DID_TEST_H__
+#ifndef __DID_TEST_H__
+#define __DID_TEST_H__
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -47,8 +44,10 @@ extern "C" {
 #endif
 
 #ifdef UNIT_TESTING
+#define TEST_DID(v,s) (did_t){v,s}
+
 void did_reset();
-int did_equal(did_t did, did_val_t value, did_sz_t size);
+int did_match(did_t did, did_val_t value, did_sz_t size);
 int did_invalid(did_t did);
 #endif
 
@@ -56,4 +55,4 @@ int did_invalid(did_t did);
 }
 #endif
 
-#endif /* DID_DID_TEST_H__ */
+#endif /* __DID_TEST_H__ */

@@ -12,20 +12,20 @@ wait 9 d
 wait 10 d
 wait 11 d
 
-t 0 -1 0
+thread 0 -1 0
 wait 0 h
 
 OBDIO 0 did iba_addr bytes acc_size wr
 wait 0 r
 
-g
-g c
-g
+goodput
+goodput c
+goodput
 echo OBDIO THRUPUT bytes acc_size UNUSED
-os
+oset
 sleep wait_time
 echo OBDIO THRUPUT bytes acc_size UNUSED
-g
-od
+goodput
+odisp
 wait 0 r
-st
+status

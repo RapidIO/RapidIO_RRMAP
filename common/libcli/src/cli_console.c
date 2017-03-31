@@ -1,35 +1,35 @@
 /*
-****************************************************************************
-Copyright (c) 2015, Integrated Device Technology Inc.
-Copyright (c) 2015, RapidIO Trade Association
-All rights reserved.
+ ****************************************************************************
+ Copyright (c) 2015, Integrated Device Technology Inc.
+ Copyright (c) 2015, RapidIO Trade Association
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without modification,
+ are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*************************************************************************
-*/
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *************************************************************************
+ */
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -50,45 +50,50 @@ void init_cli_env(struct cli_env *env)
 {
 	memset(env, 0, sizeof(struct cli_env));
 	env->sess_socket = -1;
-};
+}
 
 void *console(void *cons_parm)
 {
 	struct cli_env cons_env;
 
 	init_cli_env(&cons_env);
-	if (NULL == cons_parm)
-		strcpy(cons_env.prompt, "PROMPT> ");
-	else
-		strcpy(cons_env.prompt, (char *)cons_parm);
+
+	if (NULL == cons_parm) {
+		SAFE_STRNCPY(cons_env.prompt, "PROMPT> ", sizeof(cons_env.prompt));
+	} else {
+		SAFE_STRNCPY(cons_env.prompt, (char *)cons_parm, sizeof(cons_env.prompt));
+	}
 
 	cli_terminal(&cons_env);
-
 	pthread_exit(NULL);
-} /* console */
+}
 
-void* console_rc(void* cons_parm_v)
+void *console_rc(void *cons_parm_v)
 {
-	if (cons_parm_v == NULL)
+	if (NULL == cons_parm_v) {
 		return NULL;
+	}
 
 	ConsoleRc_t* cons_parm = (ConsoleRc_t*)cons_parm_v;
 
 	struct cli_env cons_env;
 
 	init_cli_env(&cons_env);
-	if (NULL == cons_parm->prompt)
-		strcpy(cons_env.prompt, "PROMPT> ");
-	else
-		strcpy(cons_env.prompt, (char *)cons_parm->prompt);
+	if (NULL == cons_parm->prompt) {
+		SAFE_STRNCPY(cons_env.prompt, "PROMPT> ",
+						sizeof(cons_env.prompt));
+	} else {
+		SAFE_STRNCPY(cons_env.prompt, cons_parm->prompt,
+						sizeof(cons_env.prompt));
+	}
 
-	if (cons_parm->script != NULL)
+	if (NULL != cons_parm->script) {
 		cli_script(&cons_env, (char *)cons_parm->script, 1);
+	}
 
 	cli_terminal(&cons_env);
-
 	pthread_exit(NULL);
-} /* console_rc */
+}
 
 #ifdef __cplusplus
 }

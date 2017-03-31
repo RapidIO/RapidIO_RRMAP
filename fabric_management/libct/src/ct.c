@@ -68,7 +68,7 @@ uint32_t ct_idx = 0;
 
 #define CT_FROM_NR_DID(n,d) (((n << 16) & CT_NR_MASK) | (CT_DID_MASK & d))
 
-void initialize()
+static void initialize()
 {
 	ct_ids[0] = -1;
 	ct_idx = 1;
@@ -242,7 +242,7 @@ int ct_create_from_nr_and_did(ct_t *ct, ct_nr_t nr, did_t did)
 		return -EKEYEXPIRED;
 	}
 
-	rc = did_get(&cached_did, did_get_value(did), did_get_size(did));
+	rc = did_get(&cached_did, did_get_value(did));
 	if (rc) {
 		*ct = COMPTAG_UNSET;
 		return rc;
@@ -286,7 +286,7 @@ int ct_create_from_did(ct_t *ct, did_t did)
 	}
 
 	// verify the did is valid
-	rc = did_get(&cached_did, did_get_value(did), did_get_size(did));
+	rc = did_get(&cached_did, did_get_value(did));
 	if (rc) {
 		*ct = COMPTAG_UNSET;
 		return rc;
@@ -295,6 +295,64 @@ int ct_create_from_did(ct_t *ct, did_t did)
 	*ct = CT_FROM_NR_DID(nr, did_get_value(did));
 	ct_ids[nr]++;
 	ct_idx = ++nr;
+	return 0;
+}
+
+/*
+ * Create or get a component tag and device Id as transported via messaging
+ * between master and slave.
+ *
+ * @param[out] ct the component tag
+ * @param[in] ct_val the component tag value
+ * @retval 0 the ct was created or exists
+ * @retval -EINVAL invalid parameter values
+ * @retval -EPERM the operation is not supported
+ *
+ * Note value and size have must be corrected for network order prior to calling
+ * this function.
+ */
+int ct_from_value(ct_t *ct, uint32_t ct_val)
+{
+	ct_nr_t nr;
+	did_val_t value;
+	did_sz_t size;
+	did_t cached_did;
+	int rc;
+	uint32_t incr;
+	uint32_t sz;
+
+	// lazy initialization
+	if (0 == ct_idx) {
+		// yes this will initialize whenever the nr value loops - no harm done
+		initialize();
+	}
+
+	if (NULL == ct) {
+		return -EINVAL;
+	}
+
+	// if already created, don't account for it again.
+	value = (did_val_t)(CT_DID_MASK & ct_val);
+	size = value > DID_ANY_DEV8_ID.value ? dev16_sz : dev08_sz;
+
+	cached_did = (did_t) {value, size};
+	if (did_not_inuse(cached_did)) {
+		incr = 1;
+	} else {
+		sz = (size == dev16_sz ? 1 : 0);
+		rc = did_from_value(&cached_did, value, sz);
+		if (rc) {
+			*ct = COMPTAG_UNSET;
+			return rc;
+		}
+		incr = 0;
+	}
+
+	*ct = ct_val;
+	if (incr) {
+		nr = CT_NR_MASK & ct_val;
+		ct_ids[nr]++;
+	}
 	return 0;
 }
 
@@ -356,19 +414,17 @@ int ct_get_nr(ct_nr_t *nr, ct_t ct)
  * Return the device Id of the component tag
  * @param[out] did the device Id
  * @param[in] ct the component tag
- * @param[in] size the size of the device Id to retrieve
  * @retval 0 the did is valid
  * @retval -EINVAL the did is null or the did of the provided ct is not in use
  */
-int ct_get_destid(did_t *did, ct_t ct, did_sz_t size)
+int ct_get_destid(did_t *did, ct_t ct)
 {
-	return did_get(did, (CT_DID_MASK & ct), size);
+	return did_get(did, (CT_DID_MASK & ct));
 }
 
 /**
  * Determine if the specified component tag is in use.
  * @param[in] ct the component tag
- * @param[in] size the size of the device id associated with the component tag
  * @retval 0 if the ct is not in use
  * @retval 1 if the ct is in use
  * @retval -EINVAL nr or did size is invalid
@@ -376,7 +432,7 @@ int ct_get_destid(did_t *did, ct_t ct, did_sz_t size)
  *
  * \note A component tag with an nr value of 0 is considered not in use
  */
-int ct_not_inuse(ct_t ct, did_sz_t size)
+int ct_not_inuse(ct_t ct)
 {
 	ct_nr_t nr;
 	did_t did;
@@ -388,9 +444,7 @@ int ct_not_inuse(ct_t ct, did_sz_t size)
 	}
 
 	if (ct_ids[nr] > 0) {
-		did.value = ct & CT_DID_MASK;
-		did.size = size;
-		return did_not_inuse(did);
+		return (did_get(&did, ct & CT_DID_MASK) ? 0 : 1);
 	}
 	return 0;
 

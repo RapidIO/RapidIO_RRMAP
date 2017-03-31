@@ -42,7 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 
 
-// #ifdef __LINUX__
 #include <stdint.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -50,45 +49,45 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-// #endif
 
+#include "rio_misc.h"
+#include "tok_parse.h"
 #include "fmd_dd.h"
 #include "fmd_app_msg.h"
 #include "liblog.h"
-// #include "dev_db.h"
-// #include "cli_cmd_db.h"
-// #include "cli_cmd_line.h"
-// #include "cli_parse.h"
 #include "libfmdd_info.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-fmdd_h ddl_h_cli;
-
 extern struct cli_cmd CLIDDLCheckCT;
 
-int CLIDDLCheckCTCmd(struct cli_env *env, int argc, char **argv)
+int CLIDDLCheckCTCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	ct_t ct;
-	uint8_t flag;
+	uint16_t flag;
 	int rc;
 
-	if (0)
-		argv[0][0] = argc;
-	ct = getHex(argv[0], 0);
-	flag = getHex(argv[1], 1);
+	if (tok_parse_ct(argv[0], &ct, 0)) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_CT_MSG_FMT);
+		goto exit;
+	}
 
-	LOGMSG(env, "\nChecking ct %8x flag %x\n", ct, flag);
+	if (tok_parse_ushort(argv[1], &flag, 0, 0x10, 0)) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_HEX_MSG_FMT, "flag", 0, 0x10);
+		goto exit;
+	}
 
-	rc = fmdd_check_ct(ddl_h_cli, ct, flag);
-
+	LOGMSG(env, "\nChecking ct 0x%8x flag 0x%2x\n", ct, flag);
+	rc = fmdd_check_ct(&fml, ct, (uint8_t)flag);
 	LOGMSG(env, "Return code was      : 0x%8x\n", rc);
 
+exit:
 	return 0;
 }
-;
 
 struct cli_cmd CLIDDLCheckCT = {
 (char *)"ddlct",
@@ -96,7 +95,7 @@ struct cli_cmd CLIDDLCheckCT = {
 2,
 (char *)"Device Directory Library CT check.",
 (char *)"<ct> <flag>\n"
-	"Checks whether or not an entered component tag is present\n"
+	"Checks whether an entered component tag is present\n"
 	"<flag> is a bitmask with the following values: \n"
 	"0x01 - Device is OK\n"
 	"0x02 - Device is local master port\n"
@@ -108,25 +107,31 @@ ATTR_NONE
 
 extern struct cli_cmd CLIDDLCheckDID;
 
-int CLIDDLCheckDIDCmd(struct cli_env *env, int argc, char **argv)
+int CLIDDLCheckDIDCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
-	uint32_t did;
-	uint8_t flag;
+	did_val_t did_val;
+	uint16_t flag;
 	int rc;
 
-	if (0)
-		argv[0][0] = argc;
+	if (tok_parse_did(argv[0], &did_val, 0)) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_DID_MSG_FMT);
+		goto exit;
+	}
 
-	did = getHex(argv[0], 0);
-	flag = getHex(argv[1], 0);
+	if (tok_parse_ushort(argv[1], &flag, 0, 0x10, 0)) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_HEX_MSG_FMT, "flag", 0, 0x10);
+		goto exit;
+	}
 
-	LOGMSG(env, "\nChecking Device ID : 0x%x Flag 0x%x\n", did, flag);
-	rc = fmdd_check_did(ddl_h_cli, did, flag);
-	LOGMSG(env, "Return code was    : 0x%x\n", rc);
+	LOGMSG(env, "\nChecking Device ID : 0x%8x flag 0x%2x\n", did_val, flag);
+	rc = fmdd_check_did(&fml, did_val, (uint8_t)flag);
+	LOGMSG(env, "Return code was    : 0x%8x\n", rc);
 
+exit:
 	return 0;
 }
-;
 
 struct cli_cmd CLIDDLCheckDID = {
 (char *)"ddldid",
@@ -134,7 +139,7 @@ struct cli_cmd CLIDDLCheckDID = {
 2,
 (char *)"Device Directory Library Device ID check.",
 (char *)"<did> <flag>\n"
-	"Checks whether or not an entered device ID is present\n"
+	"Checks whether an entered device ID is present\n"
 	"<flag> is a bitmask with the following values: \n"
 	"0x01 - Device is OK\n"
 	"0x02 - Device is local master port\n"
@@ -144,18 +149,53 @@ CLIDDLCheckDIDCmd,
 ATTR_NONE
 };
 
+extern struct cli_cmd CLIDDStatus;
+
+int CLIDDStatusCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
+{
+	LOGMSG(env, "\nFMD Port number    : %d", fml.portno);
+	LOGMSG(env, "\nInit ok            : %d", fml.init_ok);
+	LOGMSG(env, "\nMy name            : %s", fml.app_name);
+	LOGMSG(env, "\nMy flag            : 0x%x", fml.flag);
+	LOGMSG(env, "\nSocket file number : %d", fml.fd);
+	LOGMSG(env, "\nFMD Update period  : %d", fml.fmd_update_period);
+	LOGMSG(env, "\nMonitor alive      : %d", fml.mon_alive);
+	LOGMSG(env, "\nFMD is alive       : %d", !fml.fmd_dead);
+
+	LOGMSG(env, "\nDevice Dir FN      : %s",
+			(NULL == fml.dd ? "(nil)" : fml.dd_fn));
+	LOGMSG(env, "\nDevice Dir PTR     : %p", fml.dd);
+	LOGMSG(env, "\nDevice Dir Mtx FN  : %s",
+			(NULL == fml.dd_mtx ? "(nil)" : fml.dd_mtx_fn));
+	LOGMSG(env, "\nDevice Dir Mtx PTR : %p", fml.dd_mtx);
+	LOGMSG(env, "\nDevice Dir Mtx IDX : %d", fml.app_idx);
+
+	LOGMSG(env, "\n");
+
+	return 0;
+}
+
+struct cli_cmd CLIDDStatus = {
+(char *)"ddstat",
+3,
+0,
+(char *)"Display Device Directory connection status.\n",
+(char *)"<No Parameters>\n"
+	"Display Device Directory status of connection to DD and to host.\n",
+CLIDDStatusCmd,
+ATTR_NONE
+};
+
 extern struct cli_cmd CLIDDList;
 
-int CLIDDListCmd(struct cli_env *env, int argc, char **argv)
+int CLIDDListCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 {
-	uint32_t did_list_sz, *did_list, i;
+	uint32_t did_list_sz;
+	uint32_t i;
+	did_val_t *did_list;
 	int rc;
 
-	if (0) {
-		argv[0][0] = argc;
-	}
-
-	rc = fmdd_get_did_list(ddl_h_cli, &did_list_sz, &did_list);
+	rc = fmdd_get_did_list(&fml, &did_list_sz, &did_list);
 
 	// did_list can be null on success
 	LOGMSG(env, "\nfmdd_get_did_list returned : %d\n", rc);
@@ -175,39 +215,35 @@ int CLIDDListCmd(struct cli_env *env, int argc, char **argv)
 	for (i = 0; i < did_list_sz; i++) {
 		LOGMSG(env, "%d %8x\n", did_list_sz, did_list[i]);
 	}
+
 exit:
 	free(did_list);
 	return 0;
-};
+}
 
 struct cli_cmd CLIDDList = {
 (char *)"ddlli",
 5,
 0,
-(char *)"(No parameters) Display Device Directory device ID list.\n",
+(char *)"Display Device Directory device ID list.\n",
 (char *)"<No Parameters>\n"
 	"Display Device Directory device ID list.\n",
 CLIDDListCmd,
 ATTR_NONE
 };
 
-struct cli_cmd *libfmdd_cmds[3] = {
+struct cli_cmd *libfmdd_cmds[4] = {
+	&CLIDDStatus,
 	&CLIDDLCheckCT,
 	&CLIDDLCheckDID,
 	&CLIDDList
 };
 
-void fmdd_bind_dbg_cmds(void *fmdd_h)
+void fmdd_bind_dbg_cmds(void)
 {
-	struct fml_globals *t_fml = (struct fml_globals *)fmdd_h;
-
-	if  (&fml == t_fml) {
-		ddl_h_cli = fmdd_h;
-		add_commands_to_cmd_db(sizeof(libfmdd_cmds)/
-					sizeof(libfmdd_cmds[0]), 
-					&libfmdd_cmds[0]);
-		bind_dd_cmds(fml.dd, fml.dd_mtx, fml.dd_fn, fml.dd_mtx_fn);
-	};
+	add_commands_to_cmd_db(sizeof(libfmdd_cmds) / sizeof(libfmdd_cmds[0]),
+				&libfmdd_cmds[0]);
+	bind_dd_cmds(&fml.dd, &fml.dd_mtx, fml.dd_fn, fml.dd_mtx_fn);
 }
 
 #ifdef __cplusplus

@@ -12,14 +12,14 @@ wait 9 d
 wait 10 d
 wait 11 d
 
-t 0 -1 0
-t 1 -1 0
-t 2 -1 0
-t 3 -1 0
-t 4 -1 0
-t 5 -1 0
-t 6 -1 0
-t 7 -1 0
+thread 0 -1 0
+thread 1 -1 0
+thread 2 -1 0
+thread 3 -1 0
+thread 4 -1 0
+thread 5 -1 0
+thread 6 -1 0
+thread 7 -1 0
 
 wait 0 h
 wait 1 h
@@ -48,16 +48,16 @@ wait 5 R
 wait 6 R
 wait 7 R
 
-g
-g c
-g
+goodput
+goodput c
+goodput
 
 echo OBDIO THRUPUT bytes acc_size UNUSED
-os
+oset
 sleep wait_time
 
 echo OBDIO THRUPUT bytes acc_size UNUSED
-g
-od
+goodput
+odisp
 wait 0 r
-st
+status

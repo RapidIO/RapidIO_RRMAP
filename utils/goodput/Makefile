@@ -33,36 +33,42 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME=goodput
+TARGET:=$(NAME)
 DEBUG?=DEBUG
 
-config?=NODEBUG
-LIBMPINCDIR=$(COMMONDIR)/libmport/inc
-REGSDIR=$(FMDDIR)/librio_switch/inc
+INCLUDES= inc/worker.h inc/goodput.h inc/goodput_cli.h
+OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
 # Kernel-mode flags
 CXXFLAGS+=-Wno-sign-compare
 CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
-CXXFLAGS+=-I$(LIBMPINCDIR) -I$(REGSDIR)
-CXXFLAGS+=-I$(FMDDIR)/libdid/inc -I$(FMDDIR)/libct/inc
+CXXFLAGS+=-I$(FMDDIR)/librio/inc
 CXXFLAGS+=-pthread
 
-INCLUDES = inc/worker.h inc/goodput.h inc/goodput_cli.h
-SOURCES = src/goodput.c src/goodput_cli.c src/worker.c
+LDFLAGS_STATIC+=-L$(COMMONLIB) -lmport -lrsvdmem -ltime_utils -llog -lcli
+LDFLAGS_DYNAMIC+=-lpthread -ldl -lrt
 
-LIBRARIES =  -lmport -lrsvdmem -ltime_utils -llog -lcli \
-	 -lpthread -ldl -lrt 
 
-all: goodput 
+.PHONY: all clean logs scripts
+
+all: $(TARGET)
 
 scripts:
 	@ln -s scripts mport0 &>/dev/null || true
 
-goodput: $(SOURCES) $(INCLUDES)
-	$(CXX) $(CXXFLAGS) $(SOURCES) -o $@ $(LIBS_RPATH) $(LIBRARIES)
+src/%.o: src/%.c
+	@echo ---------- Building $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@
+
+$(TARGET): $(OBJECTS)
+	$(CXX) -o $@ $(OBJECTS) \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
 	@echo ---------- Cleaning $(NAME)...
-	@rm -f *.o goodput *~ src/*~ inc/*~ gmon.out *.log
+	@rm -f $(TARGET) $(OBJECTS) \
+	src/*~ inc/*~ ~*
 
 FORCE:
 

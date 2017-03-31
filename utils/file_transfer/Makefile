@@ -42,20 +42,22 @@ COMMON_LIBS_DIR?=../../common/libs_a
 
 CXXFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
 CXXFLAGS+=-I. -I./file_xfer_lib/inc -I./libcdev/inc -I./libfxfr/inc
-CXXFLAGS+=-I$(FMDDIR)/librio_switch/inc -I$(FMDDIR)/libdid/inc -I$(FMDDIR)/libct/inc
+CXXFLAGS+=-I$(FMDDIR)/librio/inc
+
+LDFLAGS_STATIC+=-L$(LOCAL_LIBRARY_DIR) -L$(COMMON_LIBS_DIR)
+LDFLAGS_STATIC+=-lfxfr -lmport -lrsvdmem -llog -lcli
+LDFLAGS_DYNAMIC+=-ldl -lrt
 
 CLIENT_DEPS=
-
 CLIENT_OBJS= client.o
 
 SERVER_DEPS=
-
 SERVER_OBJS= server.o
 
 LIB_DEPS= libfxfr
-.PHONY: $(LIB_DEPS)
 
-LIBRARIES=-lfxfr -lmport -lrsvdmem -llog -lcli -ldl -lrt
+
+.PHONY: $(LIB_DEPS)
 
 
 %.o: %.c $(SERVER_DEPS) $(LIB_DEPS)
@@ -67,13 +69,15 @@ libfxfr:
 	cp libfxfr/libfxfr.a $(LOCAL_LIBRARY_DIR)
 	
 fxfr_server: $(SERVER_OBJS) 
-	$(CXX) $(CXXFLAGS) -o $@ $^ -L$(LOCAL_LIBRARY_DIR) -L$(COMMON_LIBS_DIR) \
-	$(LIBS_RPATH) $(LIBRARIES) \
+	$(CXX) $(CXXFLAGS) -o $@ $^ \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC) \
 	-D__CLI_LINUX__
 
 rftp: $(CLIENT_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $^ -L$(LOCAL_LIBRARY_DIR) -L$(COMMON_LIBS_DIR) \
-	$(LIBS_RPATH) $(LIBRARIES) \
+	$(CXX) $(CXXFLAGS) -o $@ $^ \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC) \
 	-D__CLI_LINUX__ -I./libfxfr/inc
 
 all: $(LIB_DEPS) libfxfr fxfr_server rftp

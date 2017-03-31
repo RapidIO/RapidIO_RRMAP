@@ -40,6 +40,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -55,11 +56,11 @@
 #include <signal.h>
 #include <pthread.h>
 
-#include "tok_parse.h"
 #include "rio_misc.h"
-#include <rapidio_mport_dma.h>
-#include <rapidio_mport_mgmt.h>
-
+#include "rio_route.h"
+#include "tok_parse.h"
+#include "rapidio_mport_dma.h"
+#include "rapidio_mport_mgmt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,14 +85,13 @@ extern "C" {
 #define PATTERN_COUNT_MASK	0x1f
 
 struct dma_async_wait_param {
-	uint32_t token;		/* DMA transaction ID token */
-	int err;		/* error code returned to caller */
+	uint32_t token; /* DMA transaction ID token */
+	int err; /* error code returned to caller */
 };
 
 #define U8P uint8_t*
 
 /// @endcond
-
 
 /// Maximum number of mismatched bytes in buffer to print.
 #define MAX_ERROR_COUNT		32
@@ -101,7 +101,7 @@ struct dma_async_wait_param {
 #define DEFAULT_IBWIN_SIZE (2 * 1024 * 1024)
 
 static riomp_mport_t mport_hnd;
-static uint32_t tgt_destid;
+static did_val_t tgt_did_val = 0;
 static uint64_t tgt_addr;
 static uint32_t offset = 0;
 static uint16_t align = 0;
@@ -110,20 +110,20 @@ static uint32_t ibwin_size;
 static uint32_t tbuf_size = TEST_BUF_SIZE;
 static int debug = 0;
 
-
 static void usage(char *program)
 {
-	printf("%s - test MEMIO data transfers to/from RapidIO device\n",	program);
+	printf("%s - test MEMIO data transfers to/from RapidIO device\n",
+			program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("options are:\n");
 	printf("Common:\n");
+	printf("  --help (or -h)\n");
 	printf("  -M mport_id\n");
 	printf("  --mport mport_id\n");
 	printf("    local mport device index (default 0)\n");
 	printf("  -v turn off buffer data verification\n");
 	printf("  --debug (or -d)\n");
-	printf("  --help (or -h)\n");
 	printf("OBW mapping test mode only:\n");
 	printf("  -D xxxx\n");
 	printf("  --destid xxxx\n");
@@ -143,17 +143,20 @@ static void usage(char *program)
 	printf("  -T n\n");
 	printf("  --repeat n\n");
 	printf("    repeat test n times (default 1)\n");
-	printf("  -B xxxx size of test buffer and OBW aperture (in MB, e.g -B2) (default 256 * 1024)\n");
+	printf(
+			"  -B xxxx size of test buffer and OBW aperture (in MB, e.g -B2) (default 256 * 1024)\n");
 	printf("  -r use random size and local buffer offset values\n");
 	printf("Inbound Window mode only:\n");
 	printf("  -i\n");
-	printf("    allocate and map inbound window (memory) using default parameters\n");
+	printf(
+			"    allocate and map inbound window (memory) using default parameters\n");
 	printf("  -I xxxx\n");
 	printf("  --ibwin xxxx\n");
 	printf("    inbound window (memory) size in bytes (default 0)\n");
 	printf("  -R xxxx\n");
 	printf("  --ibbase xxxx\n");
-	printf("    inbound window base address in RapidIO address space (default any address)\n");
+	printf(
+			"    inbound window base address in RapidIO address space (default any address)\n");
 	printf("  -L xxxx\n");
 	printf("  --laddr xxxx\n");
 	printf("    physical address of reserved local memory to use\n");
@@ -163,64 +166,69 @@ static void usage(char *program)
 static struct timespec timediff(struct timespec start, struct timespec end)
 {
 	struct timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	if ((end.tv_nsec - start.tv_nsec) < 0) {
+		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+		temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
 	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+		temp.tv_sec = end.tv_sec - start.tv_sec;
+		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
 	}
 	return temp;
 }
 
 static void dmatest_init_srcs(uint8_t *buf, unsigned int start,
-			      unsigned int len, unsigned int buf_size)
+		unsigned int len, unsigned int buf_size)
 {
 	unsigned int i;
 
-	for (i = 0; i < start; i++)
+	for (i = 0; i < start; i++) {
 		buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
-	for ( ; i < start + len; i++)
-		buf[i] = PATTERN_SRC | PATTERN_COPY
-			| (~i & PATTERN_COUNT_MASK);
-	for ( ; i < buf_size; i++)
+	}
+	for (; i < start + len; i++) {
+		buf[i] = PATTERN_SRC | PATTERN_COPY | (~i & PATTERN_COUNT_MASK);
+	}
+	for (; i < buf_size; i++) {
 		buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
+	}
 }
 
 static void dmatest_init_dsts(uint8_t *buf, unsigned int start,
-			      unsigned int len, unsigned int buf_size)
+		unsigned int len, unsigned int buf_size)
 {
 	unsigned int i;
 
-	for (i = 0; i < start; i++)
+	for (i = 0; i < start; i++) {
 		buf[i] = PATTERN_DST | (~i & PATTERN_COUNT_MASK);
-	for ( ; i < start + len; i++)
+	}
+	for (; i < start + len; i++) {
 		buf[i] = PATTERN_DST | PATTERN_OVERWRITE
-			| (~i & PATTERN_COUNT_MASK);
-	for ( ; i < buf_size; i++)
+				| (~i & PATTERN_COUNT_MASK);
+	}
+	for (; i < buf_size; i++) {
 		buf[i] = PATTERN_DST | (~i & PATTERN_COUNT_MASK);
+	}
 }
 
 static void dmatest_mismatch(uint8_t actual, uint8_t pattern,
-			     unsigned int index, unsigned int counter,
-			     int is_srcbuf)
+		unsigned int index, unsigned int counter, int is_srcbuf)
 {
 	uint8_t diff = actual ^ pattern;
 	uint8_t expected = pattern | (~counter & PATTERN_COUNT_MASK);
 
-	if (is_srcbuf)
+	if (is_srcbuf) {
 		printf("srcbuf[0x%x] overwritten! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else if ((pattern & PATTERN_COPY)
-			&& (diff & (PATTERN_COPY | PATTERN_OVERWRITE)))
+				index, expected, actual);
+	} else if ((pattern & PATTERN_COPY)
+			&& (diff & (PATTERN_COPY | PATTERN_OVERWRITE))) {
 		printf("dstbuf[0x%x] not copied! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else if (diff & PATTERN_SRC)
+				index, expected, actual);
+	} else if (diff & PATTERN_SRC) {
 		printf("dstbuf[0x%x] was copied! Expected %02x, got %02x\n",
-			index, expected, actual);
-	else
+				index, expected, actual);
+	} else {
 		printf("dstbuf[0x%x] mismatch! Expected %02x, got %02x\n",
-			index, expected, actual);
+				index, expected, actual);
+	}
 }
 
 static unsigned int dmatest_verify(uint8_t *buf, unsigned int start,
@@ -238,17 +246,18 @@ static unsigned int dmatest_verify(uint8_t *buf, unsigned int start,
 		actual = buf[i];
 		expected = pattern | (~counter & PATTERN_COUNT_MASK);
 		if (actual != expected) {
-			if (error_count < MAX_ERROR_COUNT)
-				dmatest_mismatch(actual, pattern, i,
-							counter, is_srcbuf);
+			if (error_count < MAX_ERROR_COUNT) {
+				dmatest_mismatch(actual, pattern, i, counter,
+						is_srcbuf);
+			}
 			error_count++;
 		}
 		counter++;
 	}
 
-	if (error_count > MAX_ERROR_COUNT)
+	if (error_count > MAX_ERROR_COUNT) {
 		printf("%u errors suppressed\n", error_count - MAX_ERROR_COUNT);
-
+	}
 	return error_count;
 }
 
@@ -257,9 +266,9 @@ static void *obwtest_buf_alloc(uint32_t size)
 	void *buf_ptr = NULL;
 
 	buf_ptr = malloc(size);
-	if (buf_ptr == NULL )
+	if (NULL == buf_ptr) {
 		perror("malloc");
-
+	}
 	return buf_ptr;
 }
 
@@ -278,19 +287,19 @@ static void obwtest_buf_free(void *buf)
  * \param[in] loc_addr Physical address in reserved memory range
  * \param[in] verify Flag to enable/disable data verification on exit
  *
- * \return 0 if successful or error code returned by mport API.
+ * \return 0 if successfull or error code returned by mport API.
  *
  * Performs the following steps:
  *
  */
 int do_ibwin_test(uint64_t rio_base, uint32_t ib_size, uint64_t loc_addr,
-		  int verify)
+		int verify)
 {
 	int ret;
 	uint64_t ib_handle = loc_addr;
 	void *ibmap;
 
-	/** - Request mport's inbound window mapping */ 
+	/** - Request mport's inbound window mapping */
 	ret = riomp_dma_ibwin_map(mport_hnd, &rio_base, ib_size, &ib_handle);
 	if (ret) {
 		printf("Failed to allocate/map IB buffer err=%d\n", ret);
@@ -307,28 +316,36 @@ int do_ibwin_test(uint64_t rio_base, uint32_t ib_size, uint64_t loc_addr,
 	memset(ibmap, 0, ib_size);
 
 	printf("\tSuccessfully allocated/mapped IB buffer (rio_base=0x%x_%x)\n",
-	       (uint32_t)(rio_base >> 32), (uint32_t)(rio_base & 0xffffffff));
+			(uint32_t)(rio_base >> 32),
+			(uint32_t)(rio_base & 0xffffffff));
 
-	if (debug)
+	if (debug) {
 		printf("\t(h=0x%x_%x, loc=%p)\n", (uint32_t)(ib_handle >> 32),
-			(uint32_t)(ib_handle & 0xffffffff), ibmap);
+				(uint32_t)(ib_handle & 0xffffffff), ibmap);
+	}
 	printf("\t.... press Enter key to exit ....\n");
+
 	/** - Pause until a user presses Enter key */
 	getchar();
+
 	/** - Verify data before exit (if requested) */
-	if (verify)
-		dmatest_verify((U8P)ibmap, 0, ib_size, 0, PATTERN_SRC | PATTERN_COPY, 0);
+	if (verify) {
+		dmatest_verify((U8P)ibmap, 0, ib_size, 0,
+				PATTERN_SRC | PATTERN_COPY, 0);
+	}
 
 	/** - Unmap kernel-space data buffer */
 	ret = riomp_dma_unmap_memory(ib_size, ibmap);
-	if (ret)
+	if (ret) {
 		perror("munmap");
+	}
+
 out:
 	/** - Release mport's inbound mapping window */
 	ret = riomp_dma_ibwin_free(mport_hnd, &ib_handle);
-	if (ret)
+	if (ret) {
 		printf("Failed to release IB buffer err=%d\n", ret);
-
+	}
 	return 0;
 }
 
@@ -343,7 +360,7 @@ out:
  * \param[in] verify Flag to enable/disable data verification for each write-read cycle
  * \param[in] loop_count Number of write-read cycles to perform
  *
- * \return 0 if successful or error code returned by mport API.
+ * \return 0 if successfull or error code returned by mport API.
  *
  * Performs the following steps:
  */
@@ -367,46 +384,47 @@ int do_obwin_test(int random, int verify, int loop_count)
 	}
 
 	if (random) {
-		printf("\tRANDOM mode is selected for size/offset combination\n");
+		printf(
+				"\tRANDOM mode is selected for size/offset combination\n");
 		printf("\t\tmax data transfer size: %d bytes\n", copy_size);
 		srand(time(NULL));
 	} else if (copy_size + offset > tbuf_size) {
-			printf("ERR: invalid transfer size/offset combination\n");
-			return -1;
-	} else
+		printf("ERR: invalid transfer size/offset combination\n");
+		return -1;
+	} else {
 		printf("\tcopy_size=%d offset=0x%x\n", copy_size, offset);
+	}
 
 	/** * Allocate source and destination buffers */
 	buf_src = obwtest_buf_alloc(tbuf_size);
-	if (buf_src == NULL) {
+	if (NULL == buf_src) {
 		printf("DMA Test: error allocating SRC buffer\n");
 		ret = -1;
 		goto out;
 	}
 
 	buf_dst = obwtest_buf_alloc(tbuf_size);
-	if (buf_dst == NULL) {
+	if (NULL == buf_dst) {
 		printf("DMA Test: error allocating DST buffer\n");
 		ret = -1;
 		goto out;
 	}
 
 	/** * Request outbound window mapped to the specified target RapidIO device */
-	ret = riomp_dma_obwin_map(mport_hnd, tgt_destid, tgt_addr, tbuf_size, &obw_handle);
+	ret = riomp_dma_obwin_map(mport_hnd, tgt_did_val, tgt_addr, tbuf_size,
+			&obw_handle);
 	if (ret) {
 		printf("riomp_dma_obwin_map failed err=%d\n", ret);
 		goto out;
 	}
 
 	printf("OBW handle 0x%x_%08x\n", (uint32_t)(obw_handle >> 32),
-		(uint32_t)(obw_handle & 0xffffffff));
-
+			(uint32_t)(obw_handle & 0xffffffff));
 
 	/** * Map obtained outbound window into process address space */
 	ret = riomp_dma_map_memory(mport_hnd, tbuf_size, obw_handle, &obw_ptr);
 	if (ret) {
 		perror("mmap");
-		obw_ptr = NULL;
 		goto out_unmap;
 	}
 
@@ -429,24 +447,31 @@ int do_obwin_test(int random, int verify, int loop_count)
 			dst_off = offset;
 		}
 
-		printf("<%d>: len=0x%x src_off=0x%x dst_off=0x%x\n",
-			i, len, src_off, dst_off);
+		printf("<%d>: len=0x%x src_off=0x%x dst_off=0x%x\n", i, len,
+				src_off, dst_off);
 
 		/** - If data verification is requested, fill src and dst buffers
-                 * with predefined data */
+		 * with predefined data */
 		if (verify) {
-			dmatest_init_srcs((U8P)buf_src, src_off, len, tbuf_size);
-			dmatest_init_dsts((U8P)buf_dst, dst_off, len, tbuf_size);
+			dmatest_init_srcs((U8P)buf_src, src_off, len,
+					tbuf_size);
+			dmatest_init_dsts((U8P)buf_dst, dst_off, len,
+					tbuf_size);
 		}
 
-		if (debug)
-			printf("\tWrite %d bytes from src offset 0x%x\n", len, src_off);
+		if (debug) {
+			printf("\tWrite %d bytes from src offset 0x%x\n", len,
+					src_off);
+		}
 		clock_gettime(CLOCK_MONOTONIC, &wr_starttime);
+
 		/** - Write data from local source buffer to remote target inbound buffer */
 		memcpy(obw_ptr, (U8P)buf_src + src_off, len);
 		clock_gettime(CLOCK_MONOTONIC, &wr_endtime);
-		if (debug)
-			printf("\tRead %d bytes to dst offset 0x%x\n", len, dst_off);
+		if (debug) {
+			printf("\tRead %d bytes to dst offset 0x%x\n", len,
+					dst_off);
+		}
 
 		clock_gettime(CLOCK_MONOTONIC, &rd_starttime);
 		/** - Read back data from remote target inbound buffer into local destination buffer */
@@ -459,62 +484,79 @@ int do_obwin_test(int random, int verify, int loop_count)
 		if (verify) {
 			unsigned int error_count;
 
-			if (debug)
+			if (debug) {
 				printf("\tVerifying source buffer...\n");
+			}
 			error_count = dmatest_verify((U8P)buf_src, 0, src_off,
 					0, PATTERN_SRC, 1);
 			error_count += dmatest_verify((U8P)buf_src, src_off,
 					src_off + len, src_off,
 					PATTERN_SRC | PATTERN_COPY, 1);
-			error_count += dmatest_verify((U8P)buf_src, src_off + len,
-					tbuf_size, src_off + len,
+			error_count += dmatest_verify((U8P)buf_src,
+					src_off + len, tbuf_size, src_off + len,
 					PATTERN_SRC, 1);
 
-			if (debug)
+			if (debug) {
 				printf("\tVerifying destination buffer...\n");
+			}
 			error_count += dmatest_verify((U8P)buf_dst, 0, dst_off,
 					0, PATTERN_DST, 0);
 			error_count += dmatest_verify((U8P)buf_dst, dst_off,
 					dst_off + len, src_off,
 					PATTERN_SRC | PATTERN_COPY, 0);
-			error_count += dmatest_verify((U8P)buf_dst, dst_off + len,
-					tbuf_size, dst_off + len,
+			error_count += dmatest_verify((U8P)buf_dst,
+					dst_off + len, tbuf_size, dst_off + len,
 					PATTERN_DST, 0);
 			if (error_count) {
-				printf("\tBuffer verification failed with %d errors\n", error_count);
+				printf(
+						"\tBuffer verification failed with %d errors\n",
+						error_count);
 				break;
-			} else
+			} else {
 				printf("\tBuffer verification OK!\n");
-		} else
+			}
+		} else {
 			printf("\tBuffer verification is turned off!\n");
+		}
 
 		time = timediff(wr_starttime, wr_endtime);
-		totaltime = ((double) time.tv_sec + (time.tv_nsec / 1000000000.0));
-		printf("\t\tWR time: %4f s @ %4.2f MB/s\n",
-			totaltime, (len/totaltime)/(1024*1024));
-		totaltime = ((double) rd_time.tv_sec + (rd_time.tv_nsec / 1000000000.0));
-		printf("\t\tRD time: %4f s @ %4.2f MB/s\n",
-			totaltime, (len/totaltime)/(1024*1024));
+		totaltime =
+				((double)time.tv_sec
+						+ (time.tv_nsec / 1000000000.0));
+		printf("\t\tWR time: %4f s @ %4.2f MB/s\n", totaltime,
+				(len / totaltime) / (1024 * 1024));
+		totaltime = ((double)rd_time.tv_sec
+				+ (rd_time.tv_nsec / 1000000000.0));
+		printf("\t\tRD time: %4f s @ %4.2f MB/s\n", totaltime,
+				(len / totaltime) / (1024 * 1024));
 		time = timediff(wr_starttime, rd_endtime);
-		totaltime = ((double) time.tv_sec + (time.tv_nsec / 1000000000.0));
+		totaltime =
+				((double)time.tv_sec
+						+ (time.tv_nsec / 1000000000.0));
 		printf("\t\tFull Cycle time: %4f s\n", totaltime);
 	} /// - Repeat if loop_count > 1
 
 	/** * Unmap outbound window from process address space */
 	ret = riomp_dma_unmap_memory(tbuf_size, obw_ptr);
-	if (ret)
+	if (ret) {
 		perror("munmap");
+	}
+
 out_unmap:
 	/** * Release outbound window */
 	ret = riomp_dma_obwin_free(mport_hnd, &obw_handle);
-	if (ret)
+	if (ret) {
 		printf("Failed to release OB window err=%d\n", ret);
+	}
+
 out:
 	/** * Free source and destination buffers */
-	if (buf_src)
+	if (buf_src) {
 		obwtest_buf_free(buf_src);
-	if (buf_dst)
+	}
+	if (buf_dst) {
 		obwtest_buf_free(buf_dst);
+	}
 	return ret;
 }
 
@@ -540,20 +582,20 @@ int main(int argc, char** argv)
 	uint64_t rio_base = RIOMP_MAP_ANY_ADDR;
 	uint64_t loc_addr = RIOMP_MAP_ANY_ADDR;
 	static const struct option options[] = {
-		{ "destid", required_argument, NULL, 'D' },
-		{ "taddr",  required_argument, NULL, 'A' },
-		{ "size",   required_argument, NULL, 'S' },
-		{ "offset", required_argument, NULL, 'O' },
-		{ "align",  required_argument, NULL, 'a' },
-		{ "repeat", required_argument, NULL, 'T' },
-		{ "ibwin",  required_argument, NULL, 'I' },
-		{ "ibbase", required_argument, NULL, 'R' },
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "laddr",  required_argument, NULL, 'L' },
-		{ "faf",    no_argument, NULL, 'F' },
-		{ "async",  no_argument, NULL, 'Y' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
+			{"destid", required_argument, NULL, 'D'},
+			{"taddr", required_argument, NULL, 'A'},
+			{"size", required_argument, NULL, 'S'},
+			{"offset", required_argument, NULL, 'O'},
+			{"align", required_argument, NULL, 'a'},
+			{"repeat", required_argument, NULL, 'T'},
+			{"ibwin", required_argument, NULL, 'I'},
+			{"ibbase", required_argument, NULL, 'R'},
+			{"mport", required_argument, NULL, 'M'},
+			{"laddr", required_argument, NULL, 'L'},
+			{"faf", no_argument, NULL, 'F'},
+			{"async", no_argument, NULL, 'Y'},
+			{"debug", no_argument, NULL, 'd'},
+			{"help", no_argument, NULL, 'h'},
 	};
 
 	struct riomp_mgmt_mport_properties prop;
@@ -561,8 +603,10 @@ int main(int argc, char** argv)
 	bool ibwin_set = false;
 
 	/** Parse command line options, if any */
-	while (-1 != (c = getopt_long_only(argc, argv,
-			"rvdhia:A:D:I:O:M:R:S:T:B:L:", options, NULL))) {
+	while (-1
+			!= (c = getopt_long_only(argc, argv,
+					"rvdhia:A:D:I:O:M:R:S:T:B:L:", options,
+					NULL))) {
 		switch (c) {
 		case 'A':
 			if (tok_parse_ull(optarg, &tgt_addr, 0)) {
@@ -580,12 +624,13 @@ int main(int argc, char** argv)
 			break;
 		case 'a':
 			if (tok_parse_us(optarg, &align, 0)) {
-				printf(TOK_ERR_US_HEX_MSG_FMT, "Data alignment");
+				printf(TOK_ERR_US_HEX_MSG_FMT,
+						"Data alignment");
 				exit(EXIT_FAILURE);
 			}
 			break;
 		case 'D':
-			if (tok_parse_did(optarg, &tgt_destid, 0)) {
+			if (tok_parse_did(optarg, &tgt_did_val, 0)) {
 				printf(TOK_ERR_DID_MSG_FMT);
 				exit(EXIT_FAILURE);
 			}
@@ -605,7 +650,8 @@ int main(int argc, char** argv)
 			break;
 		case 'T':
 			if (tok_parse_ul(optarg, &repeat, 0)) {
-				printf(TOK_ERR_UL_HEX_MSG_FMT, "Number of repetitions");
+				printf(TOK_ERR_UL_HEX_MSG_FMT,
+						"Number of repetitions");
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -668,7 +714,8 @@ int main(int argc, char** argv)
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -682,7 +729,7 @@ int main(int argc, char** argv)
 	rc = riomp_mgmt_mport_create_handle(mport_id, 0, &mport_hnd);
 	if (rc < 0) {
 		printf("DMA Test: unable to open mport%d device err=%d\n",
-			mport_id, rc);
+				mport_id, rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -701,16 +748,19 @@ int main(int argc, char** argv)
 
 	if (ibwin_size) {
 		printf("+++ RapidIO Inbound Window Mode +++\n");
-		printf("\tmport%d ib_size=0x%x PID:%d\n",
-			mport_id, ibwin_size, (int)getpid());
+		printf("\tmport%d ib_size=0x%x PID:%d\n", mport_id, ibwin_size,
+				(int)getpid());
 		if (loc_addr != RIOMP_MAP_ANY_ADDR)
-			printf("\tloc_addr=0x%llx\n", (unsigned long long)loc_addr);
+			printf("\tloc_addr=0x%llx\n",
+					(unsigned long long)loc_addr);
 
 		do_ibwin_test(rio_base, ibwin_size, loc_addr, verify);
 	} else {
 		printf("+++ RapidIO Outbound Window Mapping Test +++\n");
 		printf("\tmport%d destID=%d rio_addr=0x%llx repeat=%d PID:%d\n",
-			mport_id, tgt_destid, (unsigned long long)tgt_addr, repeat, (int)getpid());
+				mport_id, tgt_did_val,
+				(unsigned long long)tgt_addr, repeat,
+				(int)getpid());
 		printf("\tbuf_size=0x%x\n", tbuf_size);
 
 		do_obwin_test(do_rand, verify, repeat);

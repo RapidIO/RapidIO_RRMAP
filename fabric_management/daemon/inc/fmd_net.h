@@ -31,12 +31,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_NET_H__
+#define __FMD_NET_H__
+
 #include "rio_ecosystem.h"
 #include "riocp_pe.h"
 #include "cfg.h"
-
-#ifndef _FMD_NET_H_
-#define _FMD_NET_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,4 +52,4 @@ int fmd_enable_all_endpoints(riocp_pe_handle mport_pe);
 }
 #endif
 
-#endif /* _FMD_NET_H_ */
+#endif /* __FMD_NET_H__ */

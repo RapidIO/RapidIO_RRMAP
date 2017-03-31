@@ -38,8 +38,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 
-#include "rio_ecosystem.h"
+#include "rio_route.h"
 #include "tok_parse.h"
+#include "did.h"
 #include "ct.h"
 #include "fmd.h"
 #include "fmd_dev_rw_cli.h"
@@ -50,10 +51,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string_util.h"
 
 #include "rio_standard.h"
-#include "IDT_RXS2448.h"
-#include "IDT_RXS_API.h"
-#include "IDT_RXS_Routing_Table_Config_API.h"
-#include "IDT_Routing_Table_Config_API.h"
+#include "RXS2448.h"
+#include "RapidIO_Routing_Table_API.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,7 +101,7 @@ static uint32_t mstore_address;
 static uint32_t mstore_numbytes;
 static uint32_t mstore_numacc;
 static uint32_t mstore_data;
-static uint32_t mstore_did;
+static did_t mstore_did;
 static hc_t mstore_hc;
 
 void aligningAddress(struct cli_env *env, uint32_t address)
@@ -131,8 +130,7 @@ int mport_read(riocp_pe_handle pe_h, uint32_t offset, uint32_t *data)
 	int rc;
 	uint32_t temp_data;
 
-	rc = pe_h->mport->minfo->reg_acc.reg_rd(pe_h, offset, &temp_data);
-
+	rc = riocp_drv_reg_rd(pe_h, offset, &temp_data);
 	if (!rc)
 		*data = temp_data;
 	return rc;
@@ -140,7 +138,7 @@ int mport_read(riocp_pe_handle pe_h, uint32_t offset, uint32_t *data)
 
 int mport_write(riocp_pe_handle pe_h, uint32_t offset, uint32_t data)
 {
-	return pe_h->mport->minfo->reg_acc.reg_wr(pe_h, offset, data);
+	return riocp_drv_reg_wr(pe_h, offset, data);
 }
 
 int select_device(struct cli_env *env, size_t pes_count, riocp_pe_handle *pes,
@@ -197,6 +195,8 @@ int CLIDevSelCmd(struct cli_env *env, int argc, char **argv)
 	int rc;
 	ct_t comptag = 0;
 	ct_t pe_ct;
+	uint32_t num_switches;
+	uint32_t num_endpoints;
 	const char *dev_name, *vend_name, *sysfs_name;
 
 	rc = riocp_mport_get_pe_list(mport_pe, &pes_count, &pes);
@@ -205,10 +205,8 @@ int CLIDevSelCmd(struct cli_env *env, int argc, char **argv)
 		goto exit;
 	}
 
-	if (argc) {
-		if (select_device(env, pes_count, pes, argv[0])) {
-			goto exit;
-		}
+	if (argc && select_device(env, pes_count, pes, argv[0])) {
+		goto exit;
 	}
 
 	if (NULL != env->h) {
@@ -223,7 +221,19 @@ int CLIDevSelCmd(struct cli_env *env, int argc, char **argv)
 		LOGMSG(env, "\nNo PEs discovered!\n");
 		goto exit;
 	}
-	
+
+	num_switches = 0;
+	num_endpoints = 0;
+	for (i = 0; i < pes_count; i++) {
+		if (RIOCP_PE_IS_SWITCH(pes[i]->cap)) {
+			num_switches++;
+		} else {
+			num_endpoints++;
+		}
+	}
+	LOGMSG(env, "Number of switches: %d\n", num_switches);
+	LOGMSG(env, "Number of endpoints: %d\n", num_endpoints);
+
 	LOGMSG(env,
 			"\n  CompTag -->Sysfs Name<-- ----------->> Vendor <<-------------------  Device\n");
 	for (i = 0; i < pes_count; i++) {
@@ -236,6 +246,7 @@ int CLIDevSelCmd(struct cli_env *env, int argc, char **argv)
 				(pe_ct == comptag) ? "*" : " ", pe_ct,
 				sysfs_name, vend_name, dev_name);
 	}
+
 exit:
 	rc = riocp_mport_free_pe_list(&pes);
 	if (rc) {
@@ -356,7 +367,7 @@ int CLIRegWriteCmd(struct cli_env *env, int argc, char **argv)
 	if (NULL == pe_h) {
 		LOGMSG(env, "\nNo Device Selected...\n");
 		goto exit;
-	};
+	}
 
 	address = store_address;
 	data = store_data;
@@ -531,7 +542,7 @@ int CLIRegWriteNoReadbackCmd(struct cli_env *env, int argc, char **argv)
 	if (NULL == pe_h) {
 		LOGMSG(env, "\nNo Device Selected...\n");
 		goto exit;
-	};
+	}
 
 	address = store_address;
 	data = store_data;
@@ -571,7 +582,7 @@ int CLIRegWriteNoReadbackCmd(struct cli_env *env, int argc, char **argv)
 		failedWrite(env, address, data, rc);
 		goto exit;
 	} else {
-		LOGMSG(env, "\nWrite successful\n");
+		LOGMSG(env, "\nWrite successfull\n");
 	}
 exit:
 	return errorStat;
@@ -639,7 +650,7 @@ int expect(struct cli_env *env, int argc, char **argv, int inverse)
 	if (0 != rc) {
 		failedReading(env, address, rc);
 		goto exit;
-	};
+	}
 
 	if (((data == expdata) && (!inverse))
 			|| ((data != expdata) && (inverse))) {
@@ -651,6 +662,7 @@ int expect(struct cli_env *env, int argc, char **argv, int inverse)
 				"\nFAILED: Address: 0x%08x Data 0x%08x ExpData 0x%08x\n",
 				address, data, expdata);
 	}
+
 exit:
 	return errorStat;
 }
@@ -801,7 +813,8 @@ int CLIMRegReadCmd(struct cli_env *env, int argc, char **argv)
 	uint32_t address;
 	uint32_t data, prevRead;
 	uint32_t numReads, i;
-	uint32_t did;
+	did_val_t did_val;
+	did_t did;
 	hc_t hc;
 	int rc;
 
@@ -826,11 +839,12 @@ int CLIMRegReadCmd(struct cli_env *env, int argc, char **argv)
 		}
 		// no break
 	case 2:
-		if (tok_parse_did(argv[1], &did, 0)) {
+		if (tok_parse_did(argv[1], &did_val, 0)) {
 			LOGMSG(env, "\n");
 			LOGMSG(env, TOK_ERR_DID_MSG_FMT);
 			goto exit;
 		}
+		did = (did_t){did_val, dev08_sz};
 		// no break
 	case 1:
 		if (tok_parse_ul(argv[0], &address, 0)) {
@@ -856,7 +870,7 @@ int CLIMRegReadCmd(struct cli_env *env, int argc, char **argv)
 	mstore_numacc = numReads;
 
 	for (i = 0; i < numReads; i++) {
-		rc = pe_mpsw_rw_driver.raw_reg_rd((riocp_pe_handle)env->h,
+		rc = riocp_drv_raw_reg_rd((riocp_pe_handle)env->h,
 			did, hc, address, &data);
 
 		if (rc) {
@@ -896,7 +910,8 @@ int CLIMRegWriteCmd(struct cli_env *env, int argc, char **argv)
 {
 	int errorStat = 0;
 	uint32_t address;
-	uint32_t did;
+	did_val_t did_val;
+	did_t did;
 	hc_t hc;
 	uint32_t data;
 	uint32_t rc;
@@ -915,11 +930,12 @@ int CLIMRegWriteCmd(struct cli_env *env, int argc, char **argv)
 		}
 		// no break
 	case 3:
-		if (tok_parse_did(argv[2], &did, 0)) {
+		if (tok_parse_did(argv[2], &did_val, 0)) {
 			LOGMSG(env, "\n");
 			LOGMSG(env, TOK_ERR_DID_MSG_FMT);
 			goto exit;
 		}
+		did = (did_t){did_val, dev08_sz};
 		// no break
 	case 2:
 		if (tok_parse_ul(argv[1], &data, 0)) {
@@ -953,7 +969,7 @@ int CLIMRegWriteCmd(struct cli_env *env, int argc, char **argv)
 
 	/* Command arguments are syntactically correct - do write */
 
-	rc = pe_mpsw_rw_driver.raw_reg_wr((riocp_pe_handle)env->h,
+	rc = riocp_drv_raw_reg_wr((riocp_pe_handle)env->h,
 		did, hc, address, data);
 
 	if (0 != rc) {
@@ -962,7 +978,7 @@ int CLIMRegWriteCmd(struct cli_env *env, int argc, char **argv)
 	}
 
 	/* read data back */
-	rc = pe_mpsw_rw_driver.raw_reg_rd((riocp_pe_handle)env->h,
+	rc = riocp_drv_raw_reg_rd((riocp_pe_handle)env->h,
 		did, hc, address, &data);
 
 	if (0 != rc) {
@@ -1015,7 +1031,7 @@ void fmd_bind_dev_rw_cmds(void)
 	store_data = 0;
 
 	mstore_address = 0;
-	mstore_did = 0;
+	mstore_did = DID_INVALID_ID;
 	mstore_hc = HC_MP;
 	mstore_numbytes = 4;
 	mstore_numacc = 1;

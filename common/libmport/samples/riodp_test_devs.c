@@ -55,8 +55,7 @@
 #include <pthread.h>
 
 #include "string_util.h"
-#include "rio_ecosystem.h"
-#include "ct.h"
+#include "rio_route.h"
 #include "tok_parse.h"
 #include "rapidio_mport_dma.h"
 #include "rapidio_mport_mgmt.h"
@@ -70,7 +69,7 @@ extern "C" {
 #define RIODP_MAX_DEV_NAME_SZ 20
 
 static riomp_mport_t mport_hnd;
-static uint32_t tgt_destid;
+static did_val_t tgt_did_val = 0;
 static hc_t tgt_hop = HC_MP;
 static ct_t comptag = 0;
 
@@ -78,10 +77,11 @@ static char dev_name[RIODP_MAX_DEV_NAME_SZ + 1];
 
 static void usage(char *program)
 {
-	printf("%s - test device object creation/removal\n",	program);
+	printf("%s - test device object creation/removal\n", program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("Options are:\n");
+	printf("  --help (or -h)\n");
 	printf("  -M mport_id\n");
 	printf("  --mport mport_id\n");
 	printf("    local mport device index (default 0)\n");
@@ -99,7 +99,6 @@ static void usage(char *program)
 	printf("  -N <device_name>\n");
 	printf("  --name <device_name>\n");
 	printf("    RapidIO device name (default the empty string)\n");
-	printf("  --help (or -h)\n");
 	printf("\n");
 }
 
@@ -118,10 +117,11 @@ void test_create(void)
 {
 	int ret;
 
-	ret = riomp_mgmt_device_add(mport_hnd, tgt_destid, tgt_hop, comptag,
-			       (*dev_name == '\0') ? NULL : dev_name);
-	if(ret)
+	ret = riomp_mgmt_device_add(mport_hnd, tgt_did_val, tgt_hop, comptag,
+			(*dev_name == '\0') ? NULL : dev_name);
+	if (ret) {
 		printf("Failed to create device object, err=%d\n", ret);
+	}
 }
 
 /**
@@ -135,10 +135,11 @@ void test_delete(void)
 {
 	int ret;
 
-	ret = riomp_mgmt_device_del(mport_hnd, tgt_destid, tgt_hop, comptag,
-			       (*dev_name == '\0')?NULL:dev_name);
-	if(ret)
+	ret = riomp_mgmt_device_del(mport_hnd, tgt_did_val, tgt_hop, comptag,
+			(*dev_name == '\0') ? NULL : dev_name);
+	if (ret) {
 		printf("Failed to delete device object, err=%d\n", ret);
+	}
 }
 
 /**
@@ -162,13 +163,13 @@ int main(int argc, char** argv)
 	int discovered = 0;
 	uint32_t regval = 0;
 	static const struct option options[] = {
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "destid", required_argument, NULL, 'D' },
-		{ "hop",  required_argument, NULL,   'H' },
-		{ "tag", required_argument, NULL,    'T' },
-		{ "name",   required_argument, NULL, 'N' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
+			{"mport", required_argument, NULL, 'M'},
+			{"destid", required_argument, NULL, 'D'},
+			{"hop", required_argument, NULL, 'H'},
+			{"tag", required_argument, NULL, 'T'},
+			{"name", required_argument, NULL, 'N'},
+			{"debug", no_argument, NULL, 'd'},
+			{"help", no_argument, NULL, 'h'},
 	};
 
 	struct riomp_mgmt_mport_properties prop;
@@ -187,7 +188,7 @@ int main(int argc, char** argv)
 			}
 			break;
 		case 'D':
-			if (tok_parse_did(optarg, &tgt_destid, 0)) {
+			if (tok_parse_did(optarg, &tgt_did_val, 0)) {
 				printf(TOK_ERR_DID_MSG_FMT);
 				exit(EXIT_FAILURE);
 			}
@@ -216,7 +217,8 @@ int main(int argc, char** argv)
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -228,17 +230,17 @@ int main(int argc, char** argv)
 	}
 
 	if (do_create && do_delete) {
-		printf("%s: Unable to create and delete device object simultaneously\n",
-			program);
+		printf(
+				"%s: Unable to create and delete device object simultaneously\n",
+				program);
 		exit(EXIT_FAILURE);
 	}
 
-	/** - Open mport device and query RapidIO link status.
-          Exit if link is not active */
+	/** Open mport device and query RapidIO link status. Exit if link is not active */
 	err = riomp_mgmt_mport_create_handle(mport_id, 0, &mport_hnd);
 	if (err < 0) {
 		printf("DMA Test: unable to open mport%d device err=%d\n",
-			mport_id, err);
+				mport_id, err);
 		exit(EXIT_FAILURE);
 	}
 
@@ -255,7 +257,6 @@ int main(int argc, char** argv)
 		printf("Using default configuration\n\n");
 	}
 
-	// TODO - Change to generic register formula, not constant 0x13c
 	err = riomp_mgmt_lcfg_read(mport_hnd, 0x13c, sizeof(uint32_t), &regval);
 	if (err) {
 		printf("Failed to read from PORT_GEN_CTL_CSR, err=%d\n", err);
@@ -269,14 +270,21 @@ int main(int argc, char** argv)
 		printf("ATTN: Port DISCOVERED flag is not set\n");
 	}
 
-	if (discovered && prop.hdid == RIO_LAST_DEV16 ) {
-		err = riomp_mgmt_lcfg_read(mport_hnd, RIO_DEVID, sizeof(uint32_t), &regval);
-		prop.hdid = (regval >> 16) & RIO_LAST_DEV8;
-		err = riomp_mgmt_destid_set(mport_hnd, prop.hdid);
+	if (discovered && (RIO_LAST_DEV16 == prop.did_val)) {
+		err = riomp_mgmt_lcfg_read(mport_hnd, RIO_DEVID,
+				sizeof(uint32_t), &regval);
+		if (err) {
+			printf("Failed to read from RIO_DEVID, err=%d\n", err);
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+
+		prop.did_val = (regval >> 16) & RIO_LAST_DEV8;
+		err = riomp_mgmt_destid_set(mport_hnd, prop.did_val);
 		if (err) {
 			printf("Failed to update local destID, err=%d\n", err);
 		} else {
-			printf("Updated destID=0x%x\n", prop.hdid);
+			printf("Updated destID=0x%x\n", prop.did_val);
 		}
 	}
 
@@ -284,12 +292,11 @@ int main(int argc, char** argv)
 	printf("[PID:%d]\n", (int)getpid());
 	if (do_create) {
 		printf("+++ Create RapidIO device object as specified +++\n");
-		printf("\tmport%d destID=0x%x hop_count=%d CTag=0x%x",
-			mport_id, tgt_destid, tgt_hop, comptag);
+		printf("\tmport%d destID=0x%x hop_count=%d CTag=0x%x", mport_id,
+				tgt_did_val, tgt_hop, comptag);
 		if (strlen(dev_name)) {
 			printf(" name=%s\n", dev_name);
-		}
-		else {
+		} else {
 			printf("\n");
 		}
 
@@ -297,8 +304,8 @@ int main(int argc, char** argv)
 
 	} else if (do_delete) {
 		printf("+++ Delete RapidIO device object as specified +++\n");
-		printf("\tmport%d destID=0x%x hop_count=%d CTag=0x%x",
-			mport_id, tgt_destid, tgt_hop, comptag);
+		printf("\tmport%d destID=0x%x hop_count=%d CTag=0x%x", mport_id,
+				tgt_did_val, tgt_hop, comptag);
 		if (strlen(dev_name)) {
 			printf(" name=%s\n", dev_name);
 		} else {
@@ -310,7 +317,6 @@ int main(int argc, char** argv)
 		printf("Please specify the action to perform\n");
 
 out:
-
 	riomp_mgmt_mport_destroy_handle(&mport_hnd);
 	exit(rc);
 }

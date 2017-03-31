@@ -34,7 +34,7 @@ include $(TOPDIR)/rules.mk
 
 NAME:=cfg
 TARGETS:=lib$(NAME).a
-TEST_TARGET:=$(NAME)_test
+TEST_TARGETS:=$(NAME)_test
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 TEST_OBJECTS:=$(patsubst test/%.c,test/%.o,$(wildcard test/*.c))
@@ -50,42 +50,53 @@ CFLAGS=$(CXXFLAGS)
 CFLAGS+=-D$(DEBUG_CTL) -DRDMA_LL=$(LOG_LEVEL)
 CFLAGS+=-I../inc -Isrc
 CFLAGS+=-I../libriocp_pe/inc
-CFLAGS+=-I../librio_switch/inc
+CFLAGS+=-I../librio/inc
 CFLAGS+=-I../libct/inc
 CFLAGS+=-I../libdid/inc
-LDFLAGS+=-L. -l$(NAME)
 
+LDFLAGS_STATIC+=-L. -L$(COMMONLIB) -L$(FMDDIR)/libs_a -l$(NAME)
+LDFLAGS_STATIC+=$(TST_LIBS) -llog -ldid -lct -lcli
+LDFLAGS_DYNAMIC+=-lpthread
 
 .PHONY: all clean
 
 ifdef TEST
-all: $(TARGETS) $(TEST_TARGET)
+all: $(TARGETS) $(TEST_TARGETS)
 else
 all: $(TARGETS)
 endif
+
+runtests: $(TEST_TARGETS)
+	@$(foreach f,$^, \
+		echo ------------ Running $(f); \
+		$(UNIT_TEST_FAIL_POLICY) \
+		./$(f); \
+		echo; \
+	)
 
 %.a: $(OBJECTS)
 	@echo ---------- Building $@
 	$(AR) rcs $@ $^
 
-src/%.o: src/%.c $(HEADERS)
+src/%.o: src/%.c
 	@echo ---------- Building $@
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@ \
+	$(TST_INCS)
 
 test/%.o: test/%.c
 	@echo ---------- Building $@
-	$(CC) -c $(CFLAGS) $(TST_INCS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@ \
+	$(TST_INCS)
 
-test/%: test/%.o
+
+$(TEST_TARGETS): $(TEST_OBJECTS)
 	@echo ---------- Building $@
-	$(CC) -o $@ $< $(LDFLAGS) \
-	$(TST_LIBS)
-
-$(TEST_TARGET): $(TEST_TARGETS)
+	$(CC) -o $@ $< \
+	$(LDFLAGS_STATIC) \
+	$(LDFLAGS_DYNAMIC)
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...
 	rm -f $(TARGETS) $(OBJECTS) \
-	$(TEST_TARGETS) $(TEST_OBJECTS)\
-	inc/*~ src/*~ test/*~ *~ *.a
-
+	$(TEST_TARGETS) $(TEST_OBJECTS) \
+	inc/*~ src/*~ test/*~ *~

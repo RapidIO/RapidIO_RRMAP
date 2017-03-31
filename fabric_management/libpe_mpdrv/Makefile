@@ -49,10 +49,11 @@ CFLAGS+=-I../inc
 CFLAGS+=-I../libdid/inc
 CFLAGS+=-I../libct/inc
 CFLAGS+=-I../libriocp_pe/inc -I../libriocp_pe/src
-CFLAGS+=-I../librio_switch/inc
+CFLAGS+=-I../librio/inc
 CFLAGS+=-I../libcfg/inc
 
-LDFLAGS+=-L. -l$(NAME)
+LDFLAGS_STATIC+=-L. -L$(COMMONLIB) -L../libs_a
+LDFLAGS_STATIC+=-lcli -llog -lmport -lriocp_pe -lrio
 
 
 .PHONY: all clean
@@ -73,9 +74,8 @@ src/%.o: src/%.c $(HEADERS)
 
 $(TEST_TARGET) : $(OBJECTS) $(TEST_OBJECTS)
 	@echo ---------- Building $@
-	$(CC) $(OBJECTS) $(TEST_OBJECTS) -o $(TEST_TARGET) -lcli -llog \
-	-lmport -lriocp_pe -lrio_switch -pthread \
-	-L. -L$(COMMONLIBA) -L../libs_a
+	$(CC) $(OBJECTS) $(TEST_OBJECTS) -o $(TEST_TARGET) \
+	$(LDFLAGS_STATIC)
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...

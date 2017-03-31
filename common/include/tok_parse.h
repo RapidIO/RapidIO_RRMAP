@@ -1,43 +1,44 @@
 /*
-****************************************************************************
-Copyright (c) 2016, Integrated Device Technology Inc.
-Copyright (c) 2016, RapidIO Trade Association
-All rights reserved.
+ ****************************************************************************
+ Copyright (c) 2016, Integrated Device Technology Inc.
+ Copyright (c) 2016, RapidIO Trade Association
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without modification,
+ are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*************************************************************************
-*/
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *************************************************************************
+ */
 
-#ifndef COMMON_INCLUDE_TOK_PARSE_H_
-#define COMMON_INCLUDE_TOK_PARSE_H_
+#ifndef __TOK_PARSE_H__
+#define __TOK_PARSE_H__
 
 #include <stdint.h>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
+#include "rio_route.h"
 #include "rio_ecosystem.h"
 #include "rio_standard.h"
 #include "string_util.h"
@@ -70,8 +71,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-int tok_parse_ulonglong(char *token, uint64_t *value, uint64_t min, uint64_t max,
-		int base);
+int tok_parse_ulonglong(char *token, uint64_t *value, uint64_t min,
+		uint64_t max, int base);
 int tok_parse_ulong(char *token, uint32_t *value, uint32_t min, uint32_t max,
 		int base);
 int tok_parse_ushort(char *token, uint16_t *value, uint16_t min, uint16_t max,
@@ -92,9 +93,9 @@ int tok_parse_ll(char *token, int64_t *value, int base);
 int tok_parse_l(char *token, int32_t *value, int base);
 int tok_parse_s(char *token, int16_t *value, int base);
 
-int tok_parse_did(char *token, uint32_t *did, int base);
-int tok_parse_ct(char *token, uint32_t *ct, int base);
-int tok_parse_hc(char *token, uint8_t *hc, int base);
+int tok_parse_did(char *token, did_val_t *did, int base);
+int tok_parse_ct(char *token, ct_t *ct, int base);
+int tok_parse_hc(char *token, hc_t *hc, int base);
 int tok_parse_mport_id(char *token, uint32_t *mport_id, int base);
 int tok_parse_log_level(char *token, uint32_t *level, int base);
 int tok_parse_socket(char *token, uint16_t *socket, int base);
@@ -104,5 +105,4 @@ int tok_parse_port_num(char *token, uint32_t *port_num, int base);
 }
 #endif
 
-#endif /* COMMON_INCLUDE_TOK_PARSE_H_ */
-
+#endif /* __TOK_PARSE_H__ */

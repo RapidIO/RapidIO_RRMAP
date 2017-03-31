@@ -46,9 +46,7 @@ CFLAGS+=-I../inc
 CFLAGS+=-I../libdid/inc
 CFLAGS+=-I../libct/inc
 CFLAGS+=-I../libriocp_pe/inc
-CFLAGS+=-I../librio_switch/inc
-
-LDFLAGS+=-L. -l$(NAME)
+CFLAGS+=-I../librio/inc
 
 
 all: $(TARGETS)
@@ -59,7 +57,7 @@ all: $(TARGETS)
 
 src/%.o: src/%.c $(HEADERS)
 	@echo ---------- Building $@
-	$(CXX) $(CFLAGS) -c $< -o $@ -ldd -L../libs_a
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...

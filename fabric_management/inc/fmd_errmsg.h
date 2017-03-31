@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_ERRMSG_H__
+#define __FMD_ERRMSG_H__
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -42,9 +45,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rio_ecosystem.h"
 #include "ct.h"
 
-#ifndef _FMD_ERRMSG_H_
-#define _FMD_ERRMSG_H_
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,7 +52,7 @@ extern "C" {
 #define MALLOC_FAIL "FMD: Cannot allocate memory"
 #define SOFTWARE_FAIL "FMD: Software failure"
 #define THREAD_FAIL "FMD: Thread creation failed %d"
-#define LOC_SOCKET_FAIL "FMD: AF_UNIX (local) socket %s failed."
+#define LOC_SOCKET_FAIL "FMD: AF_UNIX (local) socket %s failed %d."
 #define REM_SOCKET_FAIL "FMD: AF_TCP (remote) socket %d failed."
 #define CM_SOCKET_FAIL "FMD: RapidIO Socket %d failed."
 #define DEV_DB_FAIL "Device Database file %s failed. Multiple FMDs or no FMD"
@@ -61,4 +61,4 @@ extern "C" {
 }
 #endif
 
-#endif /* _FMD_ERRMSG_H_ */
+#endif /* __FMD_ERRMSG_H__ */

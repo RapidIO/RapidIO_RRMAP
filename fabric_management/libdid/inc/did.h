@@ -1,3 +1,4 @@
+
 /*
  ****************************************************************************
  Copyright (c) 2016, Integrated Device Technology Inc.
@@ -31,20 +32,17 @@
  *************************************************************************
  */
 
-/**
- * Device id management
- */
-#ifndef DID_DID_H__
-#define DID_DID_H__
+#ifndef __DID_H__
+#define __DID_H__
 
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "rio_route.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef uint32_t did_val_t;
 
 typedef enum {
 	invld_sz = 0, dev08_sz = 8, dev16_sz = 16, dev32_sz = 32,
@@ -63,15 +61,18 @@ typedef struct {
 int did_size_from_int(did_sz_t *size, uint32_t asInt);
 int did_create(did_t *did, did_sz_t size);
 int did_create_from_data(did_t *did, did_val_t value, did_sz_t size);
-int did_get(did_t *did, did_val_t value, did_sz_t size);
+int did_get(did_t *did, did_val_t value);
+int did_from_value(did_t *did, uint32_t value, uint32_t size);
+int did_to_value(did_t did, uint32_t *value, uint32_t *size);
 int did_release(did_t did);
 int did_not_inuse(did_t did);
 
 did_val_t did_get_value(did_t did);
 did_sz_t did_get_size(did_t did);
+bool did_equal(did_t did, did_t other);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* DID_DID_H__ */
+#endif /* __DID_H__ */

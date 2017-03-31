@@ -31,10 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-/* Public interface for sending files to an fxfr server */
-
 #ifndef __LIBFXFR_H__
 #define __LIBFXFR_H__
+
+/**
+ * @file libfxfr.h
+ * Public interface for sending files to an fxfr server
+ */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -44,6 +47,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <time.h>
 #include <sys/time.h>
 
+#include "rio_route.h"
 #include "rapidio_mport_mgmt.h"
 #include "rapidio_mport_sock.h"
 #include "rapidio_mport_dma.h"
@@ -54,8 +58,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-extern int send_file(char *src_name, char *dest_name, 
-		uint8_t mport_num, uint16_t destID, int svr_skt, uint8_t debug,
+int send_file(char *src_name, char *dest_name, did_val_t did_val,
+		uint16_t skt_num, uint8_t mport_num, uint8_t debug,
 		struct timespec *st_time, uint64_t *bytes_sent, uint8_t k_buff);
 
 #ifdef __cplusplus

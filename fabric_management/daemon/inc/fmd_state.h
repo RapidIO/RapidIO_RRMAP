@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_STATE_H__
+#define __FMD_STATE_H__
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -54,16 +57,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
-// #include "IDT_Routing_Table_Config_API.h"
-// #include "IDT_Port_Config_API.h"
+
 #include "riocp_pe_internal.h"
 #include "fmd_dd.h"
 #include "cfg.h"
 #include "fmd_opts.h"
 #include "rapidio_mport_mgmt.h"
-
-#ifndef _FMD_STATE_H_
-#define _FMD_STATE_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,4 +97,4 @@ extern struct fmd_state *fmd;
 }
 #endif
 
-#endif /* _FMD_STATE_H_ */
+#endif /* __FMD_STATE_H__ */

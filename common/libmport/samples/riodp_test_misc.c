@@ -56,11 +56,11 @@
 #include <getopt.h>
 #include <ctype.h>
 
-#include "rio_ecosystem.h"
+#include "rio_route.h"
 #include "tok_parse.h"
-#include <rapidio_mport_dma.h>
-#include <rapidio_mport_mgmt.h>
-#include <rapidio_mport_sock.h>
+#include "rapidio_mport_dma.h"
+#include "rapidio_mport_mgmt.h"
+#include "rapidio_mport_sock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,15 +71,15 @@ static int debug = 0;
 static void usage(char *program)
 {
 	printf("%s - test register access operations to/from RapidIO device\n",
-		program);
+			program);
 	printf("Usage:\n");
 	printf("  %s [options]\n", program);
 	printf("Options are:\n");
+	printf("  --help (or -h)\n");
 	printf("  -M mport_id\n");
 	printf("  --mport mport_id\n");
 	printf("    local mport device index (default 0)\n");
 	printf("  --debug (or -d)\n");
-	printf("  --help (or -h)\n");
 	printf("  -D xxxx\n");
 	printf("  --destid xxxx\n");
 	printf("    destination ID of target RapidIO device (default any)\n");
@@ -120,23 +120,23 @@ int main(int argc, char** argv)
 	char *program = argv[0];
 
 	// command line parameters
-	uint32_t tgt_destid = RIO_LAST_DEV8;
+	did_val_t tgt_did_val = RIO_LAST_DEV8;
 	uint32_t mport_id = 0;
-	uint8_t tgt_hc = 0xff;
+	hc_t tgt_hc = HC_MP;
 	uint32_t tgt_remote = 0, tgt_write = 0, do_query = 0;
 	uint32_t op_size = 4; // sizeof(uint32_t);
 	uint32_t offset = 0;
 	uint32_t data = 0;
 
 	static const struct option options[] = {
-		{ "mport",  required_argument, NULL, 'M' },
-		{ "destid", required_argument, NULL, 'D' },
-		{ "hop",    required_argument, NULL, 'H' },
-		{ "offset", required_argument, NULL, 'O' },
-		{ "size",   required_argument, NULL, 'S' },
-		{ "data",   required_argument, NULL, 'V' },
-		{ "debug",  no_argument, NULL, 'd' },
-		{ "help",   no_argument, NULL, 'h' },
+			{"mport", required_argument, NULL, 'M'},
+			{"destid", required_argument, NULL, 'D'},
+			{"hop", required_argument, NULL, 'H'},
+			{"offset", required_argument, NULL, 'O'},
+			{"size", required_argument, NULL, 'S'},
+			{"data", required_argument, NULL, 'V'},
+			{"debug", no_argument, NULL, 'd'},
+			{"help", no_argument, NULL, 'h'},
 	};
 
 	struct riomp_mgmt_mport_properties prop;
@@ -145,11 +145,12 @@ int main(int argc, char** argv)
 	int rc = EXIT_SUCCESS;
 
 	/** Parse command line options, if any */
-	while (-1 != (c = getopt_long_only(argc, argv,
-			"wdhqH:D:O:M:S:V:", options, NULL))) {
+	while (-1
+			!= (c = getopt_long_only(argc, argv, "wdhqH:D:O:M:S:V:",
+					options, NULL))) {
 		switch (c) {
 		case 'D':
-			if (tok_parse_did(optarg, &tgt_destid, 0)) {
+			if (tok_parse_did(optarg, &tgt_did_val, 0)) {
 				printf(TOK_ERR_DID_MSG_FMT);
 				return (EXIT_FAILURE);
 			}
@@ -199,7 +200,8 @@ int main(int argc, char** argv)
 		case 'h':
 			usage(program);
 			exit(EXIT_SUCCESS);
-		case '?':
+			break;
+//		case '?':
 		default:
 			/* Invalid command line option */
 			if (isprint(optopt)) {
@@ -231,33 +233,45 @@ int main(int argc, char** argv)
 	if (tgt_remote) {
 		/** - In case of remote target execute requested maintenance transaction */
 		if (tgt_write) {
-			if (debug)
-				printf("Write to dest=0x%x hc=0x%x offset=0x%x data=0x%08x\n",
-					tgt_destid, tgt_hc, offset, data);
-			rc = riomp_mgmt_rcfg_write(mport_hnd, tgt_destid, tgt_hc, offset,
-						op_size, data);
+			if (debug) {
+				printf(
+						"Write to dest=0x%x hc=0x%x offset=0x%x data=0x%08x\n",
+						tgt_did_val, tgt_hc, offset,
+						data);
+			}
+			rc = riomp_mgmt_rcfg_write(mport_hnd, tgt_did_val,
+					tgt_hc, offset, op_size, data);
 		} else {
-			if (debug)
-				printf("Read from dest=0x%x hc=0x%x offset=0x%x\n",
-					tgt_destid, tgt_hc, offset);
-			rc = riomp_mgmt_rcfg_read(mport_hnd, tgt_destid, tgt_hc, offset,
-						op_size, &data);
-			if (!rc)
+			if (debug) {
+				printf(
+						"Read from dest=0x%x hc=0x%x offset=0x%x\n",
+						tgt_did_val, tgt_hc, offset);
+			}
+			rc = riomp_mgmt_rcfg_read(mport_hnd, tgt_did_val, tgt_hc,
+					offset, op_size, &data);
+			if (!rc) {
 				printf("\tdata = 0x%08x\n", data);
+			}
 		}
 	} else {
 		/** - In case of local target execute requested register access operation */
 		if (tgt_write) {
-			if (debug)
-				printf("Write to local offset=0x%x data=0x%08x\n",
-					offset, data);
-			rc = riomp_mgmt_lcfg_write(mport_hnd, offset, op_size, data);
+			if (debug) {
+				printf(
+						"Write to local offset=0x%x data=0x%08x\n",
+						offset, data);
+			}
+			rc = riomp_mgmt_lcfg_write(mport_hnd, offset, op_size,
+					data);
 		} else {
-			if (debug)
+			if (debug) {
 				printf("Read from local offset=0x%x\n", offset);
-			rc = riomp_mgmt_lcfg_read(mport_hnd, offset, op_size, &data);
-			if (!rc)
+			}
+			rc = riomp_mgmt_lcfg_read(mport_hnd, offset, op_size,
+					&data);
+			if (!rc) {
 				printf("\tdata = 0x%08x\n", data);
+			}
 		}
 	}
 

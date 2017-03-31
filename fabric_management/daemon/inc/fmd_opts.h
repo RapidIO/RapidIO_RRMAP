@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
+#ifndef __FMD_OPTS_H__
+#define __FMD_OPTS_H__
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -42,9 +45,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rrmap_config.h"
 #include "cfg.h"
 #include "liblog.h"
-
-#ifndef _FMD_OPTS_H_
-#define _FMD_OPTS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,12 +63,11 @@ struct fmd_opt_vals {
 	uint32_t log_level;	/* Starting log level */
 	uint32_t mast_mode;	/* 0 - FMD slave, 1 - FMD master */
 	uint32_t mast_interval;	/* Master FMD location information */
-	uint32_t mast_devid_sz;	/* Master FMD location information */
-	uint32_t mast_devid;	/* Master FMD location information */
+	did_t mast_did;		/* Master FMD location information */
 	uint32_t mast_cm_port;	/* Master FMD location information */
 	char *fmd_cfg; /* FMD configuration file */
 	char *dd_fn; /* Device directory file name */
-	char *dd_mtx_fn; /* Device directory mutext file name */
+	char *dd_mtx_fn; /* Device directory mutex file name */
 };
 
 extern struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[]);
@@ -77,4 +76,4 @@ extern struct fmd_opt_vals *fmd_parse_options(int argc, char *argv[]);
 }
 #endif
 
-#endif /* _FMD_OPTS_H_ */
+#endif /* __FMD_OPTS_H__ */

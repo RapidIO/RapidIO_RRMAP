@@ -1,5 +1,3 @@
-/* Data structures for libriocp_pe register read/write driver  and         */
-/* libriocp_pe PE driver based on librio_switch and libmport.              */
 /*
 ****************************************************************************
 Copyright (c) 2015, Integrated Device Technology Inc.
@@ -33,15 +31,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#include "IDT_Port_Config_API.h"
-#include "IDT_Routing_Table_Config_API.h"
-#include "IDT_Statistics_Counter_API.h"
-#include "IDT_Error_Management_API.h"
-#include "rapidio_mport_mgmt.h"
-#include "pe_mpdrv.h"
-
 #ifndef __PE_MPDRV_PRIVATE_H__
 #define __PE_MPDRV_PRIVATE_H__
+
+#include "rio_ecosystem.h"
+#include "RapidIO_Port_Config_API.h"
+#include "RapidIO_Routing_Table_API.h"
+#include "RapidIO_Statistics_Counter_API.h"
+#include "RapidIO_Error_Management_API.h"
+#include "rapidio_mport_mgmt.h"
+#include "pe_mpdrv.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,15 +48,15 @@ extern "C" {
 
 struct mpsw_drv_pe_state {
         uint32_t                   rc;      /* RC of last routine call      */
-        idt_pc_rst_handling      dev_rst; /* Device reset handling config */
-        idt_pc_get_config_out_t  pc;      /* Standard config vals */
-        idt_pc_get_status_out_t  ps;      /* Standard status vals */
-        idt_rt_state_t           g_rt;    /* Global Routing Table for device */
-        idt_rt_state_t           pprt[IDT_MAX_PORTS]; /* Per port RT */
-        idt_sc_p_ctrs_val_t      sc[IDT_MAX_PORTS]; /* Statistics counters */
-        idt_sc_dev_ctrs_t        sc_dev; /* Device info for stats counters */
-        idt_em_cfg_pw_t          em_pw_cfg; /* Event Management Portwrite Cfg */
-        idt_em_dev_rpt_ctl_out_t em_notfn; /* Device notification control */
+        rio_pc_rst_handling      dev_rst; /* Device reset handling config */
+        rio_pc_get_config_out_t  pc;      /* Standard config vals */
+        rio_pc_get_status_out_t  ps;      /* Standard status vals */
+        rio_rt_state_t           g_rt;    /* Global Routing Table for device */
+        rio_rt_state_t           pprt[RIO_MAX_PORTS]; /* Per port RT */
+        rio_sc_p_ctrs_val_t      sc[RIO_MAX_PORTS]; /* Statistics counters */
+        rio_sc_dev_ctrs_t        sc_dev; /* Device info for stats counters */
+        rio_em_cfg_pw_t          em_pw_cfg; /* Event Management Portwrite Cfg */
+        rio_em_dev_rpt_ctl_out_t em_notfn; /* Device notification control */
 };
 
 /** @brief Access info linked to dev_h->accessInfo

@@ -32,21 +32,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdint.h>
+#include <stdio.h>
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
 #include <inttypes.h>
+#include <math.h>
+#include <time.h>
 
-#include <map>
-#include <iostream>
-#include <sstream>
-#include <vector>
-
-#include "rio_ecosystem.h"
+#include "rio_misc.h"
+#include "rio_route.h"
+#include "tok_parse.h"
 #include "rapidio_mport_dma.h"
 #include "string_util.h"
-#include "tok_parse.h"
-#include "rio_misc.h"
 #include "goodput_cli.h"
 #include "libtime_utils.h"
 #include "librsvdmem.h"
@@ -57,6 +55,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define FLOAT_STR_SIZE 20
 
 char *req_type_str[(int)last_action+1] = {
 	(char *)"NO_ACT",
@@ -81,7 +81,7 @@ char *req_type_str[(int)last_action+1] = {
 
 // Parse the token ensuring it is within the range for a worker index and
 // check the status of the worker thread.
-int gp_parse_worker_index(struct cli_env *env, char *tok, uint16_t *idx)
+static int gp_parse_worker_index(struct cli_env *env, char *tok, uint16_t *idx)
 {
 	if (tok_parse_ushort(tok, idx, 0, MAX_WORKER_IDX, 0)) {
 		LOGMSG(env, "\n");
@@ -93,7 +93,7 @@ int gp_parse_worker_index(struct cli_env *env, char *tok, uint16_t *idx)
 
 // Parse the token ensuring it is within the range for a worker index and
 // check the status of the worker thread.
-int gp_parse_worker_index_check_thread(struct cli_env *env, char *tok,
+static int gp_parse_worker_index_check_thread(struct cli_env *env, char *tok,
 		uint16_t *idx, bool want_halted)
 {
 	if (gp_parse_worker_index(env, tok, idx)) {
@@ -118,7 +118,7 @@ err:
 
 // Parse the token as a boolean value. The range of the token is restricted
 // to the numeric values of 0 (false) and 1 (true)
-int gp_parse_bool(struct cli_env *env, char *tok, const char *name, uint16_t *boo)
+static int gp_parse_bool(struct cli_env *env, char *tok, const char *name, uint16_t *boo)
 {
 	if (tok_parse_ushort(tok, boo, 0, 1, 0)) {
 		LOGMSG(env, "\n");
@@ -130,7 +130,7 @@ int gp_parse_bool(struct cli_env *env, char *tok, const char *name, uint16_t *bo
 
 // Parse the token ensuring it is within the provided range. Further ensure it
 // is a power of 2
-int gp_parse_ull_pw2(struct cli_env *env, char *tok, const char *name,
+static int gp_parse_ull_pw2(struct cli_env *env, char *tok, const char *name,
 		uint64_t *value, uint64_t min, uint64_t max)
 {
 	if (tok_parse_ulonglong(tok, value, min, max, 0)) {
@@ -149,28 +149,7 @@ err:
 	return 1;
 }
 
-// Parse the token ensuring it is within the provided range. Further ensure it
-// is a power of 2
-int gp_parse_ul_pw2(struct cli_env *env, char *tok, const char *name, uint32_t *value,
-		uint32_t min, uint32_t max)
-{
-	if (tok_parse_ulong(tok, value, min, max, 0)) {
-		LOGMSG(env, "\n");
-		LOGMSG(env, TOK_ERR_ULONG_HEX_MSG_FMT, name, min, max);
-		goto err;
-	}
-
-	if ((*value - 1) & *value) {
-		LOGMSG(env, "\n%s must be a power of 2\n", name);
-		goto err;
-	}
-
-	return 0;
-err:
-	return 1;
-}
-
-int gp_parse_cpu(struct cli_env *env, char *dec_parm, int *cpu)
+static int gp_parse_cpu(struct cli_env *env, char *dec_parm, int *cpu)
 {
 	const int MAX_GOODPUT_CPU = getCPUCount() - 1;
 
@@ -182,9 +161,9 @@ int gp_parse_cpu(struct cli_env *env, char *dec_parm, int *cpu)
 	return 0;
 }
 
-int gp_parse_did(struct cli_env *env, char *tok, uint32_t *did)
+static int gp_parse_did(struct cli_env *env, char *tok, did_val_t *did_val)
 {
-	if (tok_parse_did(tok, did, 0)) {
+	if (tok_parse_did(tok, did_val, 0)) {
 		LOGMSG(env, "\n");
 		LOGMSG(env, "<did> must be between 0 and 0xff\n");
 		return 1;
@@ -196,7 +175,7 @@ int gp_parse_did(struct cli_env *env, char *tok, uint32_t *did)
 #define MODE_STR(x) (char *)((x == kernel_action)?"KRNL":"User")
 #define THREAD_STR(x) (char *)((0 == x)?"---":((1 == x)?"Run":"Hlt"))
 
-int ThreadCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int ThreadCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
 	uint16_t new_dma;
@@ -239,7 +218,7 @@ ThreadCmd,
 ATTR_NONE
 };
 
-int KillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int KillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t st_idx = 0, end_idx = MAX_WORKER_IDX, i;
 
@@ -253,9 +232,10 @@ int KillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 	for (i = st_idx; i <= end_idx; i++) {
 		shutdown_worker_thread(&wkr[i]);
 	}
+
 exit:
 	return 0;
-};
+}
 
 struct cli_cmd Kill = {
 "kill",
@@ -268,7 +248,7 @@ KillCmd,
 ATTR_NONE
 };
 
-int HaltCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int HaltCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t st_idx = 0, end_idx = MAX_WORKER_IDX, i;
 
@@ -298,7 +278,7 @@ HaltCmd,
 ATTR_NONE
 };
 
-int MoveCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int MoveCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
 	int cpu;
@@ -319,6 +299,7 @@ int MoveCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 	wkr[idx].wkr_thr.cpu_req = cpu;
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
@@ -335,11 +316,12 @@ MoveCmd,
 ATTR_NONE
 };
 
-int WaitCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int WaitCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
-	uint16_t idx, limit = 10000;
-	int state = -1;
 	const struct timespec ten_usec = {0, 10 * 1000};
+
+	uint16_t idx, limit = 10000;
+	int state;
 
 	if (gp_parse_worker_index(env, argv[0], &idx)) {
 		goto exit;
@@ -372,7 +354,7 @@ int WaitCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 	}
 
 	while ((wkr[idx].stat != state) && limit--) {
-		nanosleep(&ten_usec, NULL);
+		time_sleep(&ten_usec);
 	}
 
 	if (wkr[idx].stat == state) {
@@ -399,13 +381,20 @@ WaitCmd,
 ATTR_NONE
 };
 
-int SleepCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int SleepCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
-	float sec = GetFloatParm(argv[0], 0);
+	float sec;
+	double fractional;
+	double seconds;
+	struct timespec delay;
+
+	sec = GetFloatParm(argv[0], 0);
 	if(sec > 0) {
 		LOGMSG(env, "\nSleeping %f sec\n", sec);
-		const long usec = sec * 1000000;
-		usleep(usec);
+		fractional = modf(sec, &seconds);
+		delay.tv_sec = seconds;
+		delay.tv_nsec = fractional * 1000000 * 1000;
+		time_sleep(&delay);
 	}
 	return 0;
 }
@@ -424,7 +413,7 @@ ATTR_NONE
 #define FOUR_KB (4*1024)
 #define SIXTEEN_MB (16*1024*1024)
 
-int IBAllocCmd(struct cli_env *env, int argc, char **argv)
+static int IBAllocCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx;
 	uint64_t ib_size;
@@ -442,21 +431,18 @@ int IBAllocCmd(struct cli_env *env, int argc, char **argv)
 
 	/* Note: RSVD overrides rio_addr */
 	if (argc > 3) {
-		int rc;
-		rc = get_rsvd_phys_mem(argv[3], &ib_phys_addr, &ib_size);
-		if (rc) {
+		if (get_rsvd_phys_mem(argv[3], &ib_phys_addr, &ib_size)) {
 			LOGMSG(env, "\nNo reserved memory found for keyword %s",
 					argv[3]);
 			goto exit;
 		}
-	} else if (argc > 2) {
-		if (tok_parse_ulonglong(argv[2], &ib_rio_addr, 1, UINT64_MAX,
-				0)) {
-			LOGMSG(env, "\n");
-			LOGMSG(env, TOK_ERR_ULONGLONG_HEX_MSG_FMT, "<addr>",
-					(uint64_t )1, (uint64_t)UINT64_MAX);
-			goto exit;
-		}
+	} else if ((argc > 2)
+			&& (tok_parse_ulonglong(argv[2], &ib_rio_addr, 1,
+					UINT64_MAX, 0))) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_ULONGLONG_HEX_MSG_FMT, "<addr>",
+				(uint64_t )1, (uint64_t)UINT64_MAX);
+		goto exit;
 	}
 
 	if ((ib_rio_addr != RIO_ANY_ADDR ) && ((ib_size - 1) & ib_rio_addr)) {
@@ -490,7 +476,7 @@ IBAllocCmd,
 ATTR_NONE
 };
 
-int IBDeallocCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int IBDeallocCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
 
@@ -501,6 +487,7 @@ int IBDeallocCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 	wkr[idx].action = free_ibwin;
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
@@ -516,65 +503,12 @@ IBDeallocCmd,
 ATTR_NONE
 };
 
-int IBCheckCmd(struct cli_env *env, int UNUSED(argc), char **argv)
-{
-	uint16_t idx;
-	uint64_t ib_size;
-
-	if (gp_parse_worker_index(env, argv[0], &idx)) {
-		goto exit;
-	}
-
-	if (gp_parse_ull_pw2(env, argv[1], "<size>", &ib_size, FOUR_KB, 4 * SIXTEEN_MB)) {
-		goto exit;
-	}
-
-	if (!(wkr[idx].stat == 1 || wkr[idx].stat == 2)) {
-		LOGMSG(env, "\nThread %u not halted or running\n", idx);
-		goto exit;
-	}
-
-	if (wkr[idx].ib_byte_cnt != ib_size) {
-		LOGMSG(env,
-				"\nIbwin of thread %u of size 0x%" PRIx64 " does not match requested size 0x%" PRIx64 "\n",
-				idx, wkr[idx].ib_byte_cnt, ib_size);
-		goto exit;
-	}
-	if (!wkr[idx].ib_valid) {
-		LOGMSG(env, "\nIbwin of thread %u is NOT valid\n", idx);
-		goto exit;
-	}
-	if (wkr[idx].ib_ptr == NULL) {
-		LOGMSG(env, "\nIbwin of thread %u has NULL ib_ptr\n", idx);
-		goto exit;
-	}
-
-	wkr[idx].action = no_action;
-	sem_post(&wkr[idx].run);
-
-exit:
-	return 0;
-}
-
-struct cli_cmd IBCheck = {
-"IBCheck",
-3,
-2,
-"Check if an inbound window was allocated",
-"IBCheck <idx> <size>\n"
-        "<idx>  is a worker index from 0 to " STR(MAX_WORKER_IDX) "\n"
-        "<size> must be a power of two from 0x1000 to 0x01000000\n",
-IBCheckCmd,
-ATTR_NONE
-};
-
 #define PROC_STAT_PFMT "\nTot CPU Jiffies %lu %lu %lu %lu %lu %lu %lu\n"
 
 #define CPUOCC_BUFF_SIZE 1024
 
-void cpu_occ_parse_proc_line(char *file_line, 
-				uint64_t *proc_new_utime,
-				uint64_t *proc_new_stime)
+static void cpu_occ_parse_proc_line(char *file_line, uint64_t *proc_new_utime,
+		uint64_t *proc_new_stime)
 {
 	char *tok;
 	char *saveptr;
@@ -587,31 +521,31 @@ void cpu_occ_parse_proc_line(char *file_line,
 	while ((NULL != tok) && (tok_cnt < 13)) {
 		tok = strtok_r(NULL, delim, &saveptr);
 		tok_cnt++;
-	};
+	}
 
-	if (NULL == tok)
+	if (NULL == tok) {
 		goto error;
-	if (tok_parse_ull(tok, proc_new_utime, 0))
+	}
+	if (tok_parse_ull(tok, proc_new_utime, 0)) {
 		goto error;
+	}
 
 	tok = strtok_r(NULL, delim, &saveptr);
-	if (NULL == tok)
+	if (NULL == tok) {
 		goto error;
-	if (tok_parse_ull(tok, proc_new_stime, 0))
+	}
+	if (tok_parse_ull(tok, proc_new_stime, 0)) {
 		goto error;
+	}
 	return;
+
 error:
 	ERR("\nFAILED: proc_line \"%s\"\n", fl_cpy);
 }
 
-void cpu_occ_parse_stat_line(char *file_line,
-			uint64_t *p_user,
-			uint64_t *p_nice,
-			uint64_t *p_system,
-			uint64_t *p_idle,
-			uint64_t *p_iowait,
-			uint64_t *p_irq,
-			uint64_t *p_softirq)
+static void cpu_occ_parse_stat_line(char *file_line, uint64_t *p_user,
+		uint64_t *p_nice, uint64_t *p_system, uint64_t *p_idle,
+		uint64_t *p_iowait, uint64_t *p_irq, uint64_t *p_softirq)
 {
 	char *tok, *saveptr;
 	char *delim = (char *)" ";
@@ -680,10 +614,9 @@ uint64_t new_tot_jifis;
 uint64_t new_proc_kern_jifis;
 uint64_t new_proc_user_jifis;
 
-float    cpu_occ_pct;
+float cpu_occ_pct;
 
-int cpu_occ_set(uint64_t *tot_jifis, 
-		uint64_t *proc_kern_jifis,
+static int cpu_occ_set(uint64_t *tot_jifis, uint64_t *proc_kern_jifis,
 		uint64_t *proc_user_jifis)
 {
 	FILE *stat_fp = NULL, *cpu_stat_fp = NULL;
@@ -729,7 +662,7 @@ int cpu_occ_set(uint64_t *tot_jifis,
 
 	*tot_jifis = p_user + p_nice + p_system + p_idle +
 			p_iowait + p_irq + p_softirq;
-	
+
 exit:
 	if (stat_fp != NULL) {
 		fclose(stat_fp);
@@ -740,7 +673,8 @@ exit:
 	return 0;
 }
 
-int CPUOccSetCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
+static int CPUOccSetCmd(struct cli_env *env, int UNUSED(argc),
+		char **UNUSED(argv))
 {
 
 	if (cpu_occ_set(&old_tot_jifis, &old_proc_kern_jifis,
@@ -761,7 +695,7 @@ struct cli_cmd CPUOccSet = {
 2,
 0,
 "Set CPU Occupancy measurement start point.",
-"ost\n"
+"oset\n"
 	"No parameters\n", 
 CPUOccSetCmd,
 ATTR_NONE
@@ -769,9 +703,10 @@ ATTR_NONE
 
 int cpu_occ_saved_idx;
 
-int CPUOccDisplayCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
+static int CPUOccDisplayCmd(struct cli_env *env, int UNUSED(argc),
+		char **UNUSED(argv))
 {
-	char pctg[24];
+	char pctg[FLOAT_STR_SIZE];
 	int cpus = getCPUCount();
 
 	if (!cpus) {
@@ -793,7 +728,7 @@ int CPUOccDisplayCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 			- old_proc_kern_jifis - old_proc_user_jifis))
 			/ ((float)(new_tot_jifis - old_tot_jifis))) * 100.0
 			* cpus;
-	sprintf(pctg, "%4.2f", cpu_occ_pct);
+	snprintf(pctg, sizeof(pctg), "%4.2f", cpu_occ_pct);
 
 	LOGMSG(env, "\n-Kernel- ProcUser ProcKern CPU_Occ\n");
 	LOGMSG(env, "%8ld %8ld %8ld %7s\n", new_tot_jifis - old_tot_jifis,
@@ -806,7 +741,7 @@ exit:
 
 struct cli_cmd CPUOccDisplay = {
 "odisp",
-3,
+2,
 0,
 "Display cpu occupancy",
 "odisp\n"
@@ -815,10 +750,11 @@ CPUOccDisplayCmd,
 ATTR_RPT
 };
 
-int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type action)
+static int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv,
+		enum req_type action)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint64_t rio_addr;
 	uint64_t bytes;
 	uint64_t acc_sz;
@@ -830,7 +766,7 @@ int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type 
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -867,16 +803,15 @@ int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type 
 		}
 	}
 
-	if (direct_io_tx_lat == action) {
-		if (!wkr[idx].ib_valid || (NULL == wkr[idx].ib_ptr)) {
-			LOGMSG(env, "\nNo mapped inbound window present\n");
-			goto exit;
-		}
+	if ((direct_io_tx_lat == action)
+			&& (!wkr[idx].ib_valid || (NULL == wkr[idx].ib_ptr))) {
+		LOGMSG(env, "\nNo mapped inbound window present\n");
+		goto exit;
 	}
 
 	wkr[idx].action = action;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].rio_addr = rio_addr;
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = acc_sz;
@@ -901,11 +836,12 @@ int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type 
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
 
-int OBDIOCmd(struct cli_env *env, int argc, char **argv)
+static int OBDIOCmd(struct cli_env *env, int argc, char **argv)
 {
 	return obdio_cmd(env, argc, argv, direct_io);
 }
@@ -926,7 +862,7 @@ OBDIOCmd,
 ATTR_NONE
 };
 
-int OBDIOTxLatCmd(struct cli_env *env, int argc, char **argv)
+static int OBDIOTxLatCmd(struct cli_env *env, int argc, char **argv)
 {
 	return obdio_cmd(env, argc, argv, direct_io_tx_lat);
 }
@@ -947,7 +883,7 @@ OBDIOTxLatCmd,
 ATTR_NONE
 };
 
-int OBDIORxLatCmd(struct cli_env *env, int argc, char **argv)
+static int OBDIORxLatCmd(struct cli_env *env, int argc, char **argv)
 {
 	return obdio_cmd(env, argc, argv, direct_io_rx_lat);
 }
@@ -972,18 +908,23 @@ enum riomp_dma_directio_type convert_int_to_riomp_dma_directio_type(uint16_t tra
 {
 	switch (trans) {
 	default:
-	case 0: return RIO_DIRECTIO_TYPE_NWRITE;
-	case 1: return RIO_DIRECTIO_TYPE_SWRITE;
-	case 2: return RIO_DIRECTIO_TYPE_NWRITE_R;
-	case 3: return RIO_DIRECTIO_TYPE_SWRITE_R;
-	case 4: return RIO_DIRECTIO_TYPE_NWRITE_R_ALL;
-	};
+	case 0:
+		return RIO_DIRECTIO_TYPE_NWRITE;
+	case 1:
+		return RIO_DIRECTIO_TYPE_SWRITE;
+	case 2:
+		return RIO_DIRECTIO_TYPE_NWRITE_R;
+	case 3:
+		return RIO_DIRECTIO_TYPE_SWRITE_R;
+	case 4:
+		return RIO_DIRECTIO_TYPE_NWRITE_R_ALL;
+	}
 }
 
-int dmaCmd(struct cli_env *env, int argc, char **argv)
+static int dmaCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint64_t rio_addr;
 	uint64_t bytes;
 	uint64_t acc_sz;
@@ -997,7 +938,7 @@ int dmaCmd(struct cli_env *env, int argc, char **argv)
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -1038,43 +979,47 @@ int dmaCmd(struct cli_env *env, int argc, char **argv)
 		goto exit;
 	}
 
-	/* Optional parameters - ssdist, sssize, dsdist, dssize */
+	// Optional parameters - ssdist, sssize, dsdist, dssize
 	wkr[idx].ssdist = 0;
 	wkr[idx].sssize = 0;
 	wkr[idx].dsdist = 0;
 	wkr[idx].dssize = 0;
-	if (argc > 9) {
-		if (tok_parse_ushort(argv[n++], &wkr[idx].ssdist, 0, 0xFFFF, 0)) {
-			LOGMSG(env, "\n");
-			LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<ssdist>", 0, 0xFFFF);
-			goto exit;
-		}
-		if (argc > 10) {
-			if (tok_parse_ushort(argv[n++], &wkr[idx].sssize, 0, 0x0FFF, 0)) {
-				LOGMSG(env, "\n");
-				LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<sssize>", 0, 0x0FFF);
-				goto exit;
-			}
-			if (argc > 11) {
-				if (tok_parse_ushort(argv[n++], &wkr[idx].dsdist, 0, 0xFFFF, 0)) {
-					LOGMSG(env, "\n");
-					LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dsdist>", 0, 0xFFFF);
-					goto exit;
-				}
-				if (argc > 12) {
-					if (tok_parse_ushort(argv[n++], &wkr[idx].dssize, 0, 0x0FFF, 0)) {
-						LOGMSG(env, "\n");
-						LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dssize>", 0, 0x0FFF);
-						goto exit;
-					}
-				}
-			}
-		}
+
+	if ((argc > 9)
+			&& (tok_parse_ushort(argv[n++], &wkr[idx].ssdist, 0,
+					0xFFFF, 0))) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<ssdist>", 0, 0xFFFF);
+		goto exit;
+	}
+
+	if ((argc > 10)
+			&& (tok_parse_ushort(argv[n++], &wkr[idx].sssize, 0,
+					0x0FFF, 0))) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<sssize>", 0, 0x0FFF);
+		goto exit;
+	}
+
+	if ((argc > 11)
+			&& (tok_parse_ushort(argv[n++], &wkr[idx].dsdist, 0,
+					0xFFFF, 0))) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dsdist>", 0, 0xFFFF);
+		goto exit;
+	}
+
+	if ((argc > 12)
+			&& (tok_parse_ushort(argv[n++], &wkr[idx].dssize, 0,
+					0x0FFF, 0))) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "<dssize>", 0, 0x0FFF);
+		goto exit;
 	}
 
 	wkr[idx].action = dma_tx;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].rio_addr = rio_addr;
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = acc_sz;
@@ -1086,6 +1031,7 @@ int dmaCmd(struct cli_env *env, int argc, char **argv)
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
@@ -1113,10 +1059,10 @@ dmaCmd,
 ATTR_NONE
 };
 
-int dmaNumCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int dmaNumCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint64_t rio_addr;
 	uint64_t bytes;
 	uint64_t acc_sz;
@@ -1131,7 +1077,7 @@ int dmaNumCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -1180,7 +1126,7 @@ int dmaNumCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].action = dma_tx_num;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].rio_addr = rio_addr;
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = acc_sz;
@@ -1193,6 +1139,7 @@ int dmaNumCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
@@ -1202,7 +1149,7 @@ struct cli_cmd dmaNum = {
 3,
 10,
 "Send a specified number of DMA reads/writes",
-"<idx> <did> <rio_addr> <bytes> <acc_sz> <wr> <kbuf> <trans> <sync> <num>\n"
+"dnum <idx> <did> <rio_addr> <bytes> <acc_sz> <wr> <kbuf> <trans> <sync> <num>\n"
 	"<idx>      is a worker index from 0 to " STR(MAX_WORKER_IDX) "\n"
 	"<did>      target device ID\n"
 	"<rio_addr> RapidIO memory address to access\n"
@@ -1217,10 +1164,10 @@ dmaNumCmd,
 ATTR_NONE
 };
 
-int dmaTxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int dmaTxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint64_t rio_addr;
 	uint64_t bytes;
 	uint16_t wr;
@@ -1232,7 +1179,7 @@ int dmaTxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -1270,7 +1217,7 @@ int dmaTxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].action = dma_tx_lat;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].rio_addr = rio_addr;
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = bytes;
@@ -1287,6 +1234,7 @@ int dmaTxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
 }
@@ -1309,10 +1257,10 @@ dmaTxLatCmd,
 ATTR_NONE
 };
 
-int dmaRxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int dmaRxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint64_t rio_addr;
 	uint64_t bytes;
 
@@ -1321,7 +1269,7 @@ int dmaRxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -1341,7 +1289,7 @@ int dmaRxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].action = dma_rx_lat;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].rio_addr = rio_addr;
 	wkr[idx].byte_cnt = bytes;
 	wkr[idx].acc_size = bytes;
@@ -1358,13 +1306,14 @@ int dmaRxLatCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
-};
+}
 
 struct cli_cmd dmaRxLat = {
 "dRxLat",
-8,
+2,
 4,
 "Loop back DMA writes for dTxLat command.",
 "dRxLat <idx> <did> <rio_addr> <bytes>\n"
@@ -1377,22 +1326,23 @@ dmaRxLatCmd,
 ATTR_NONE
 };
 
-void roundoff_message_size(uint32_t *bytes)
+static void roundoff_message_size(uint32_t *bytes)
 {
-	if (*bytes > 4096)
+	if (*bytes > 4096) {
 		*bytes = 4096;
+	}
 
-	if (*bytes < 24)
+	if (*bytes < 24) {
 		*bytes = 24;
+	}
 
 	*bytes = (*bytes + 7) & 0x1FF8;
 }
 
-
-int msg_tx_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type req)
+static int msg_tx_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type req)
 {
 	uint16_t idx;
-	uint32_t did;
+	did_val_t did_val;
 	uint16_t sock_num;
 	uint32_t bytes;
 
@@ -1401,7 +1351,7 @@ int msg_tx_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type
 		goto exit;
 	}
 
-	if (gp_parse_did(env, argv[n++], &did)) {
+	if (gp_parse_did(env, argv[n++], &did_val)) {
 		goto exit;
 	}
 
@@ -1423,17 +1373,18 @@ int msg_tx_cmd(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type
 
 	wkr[idx].action = req;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = did;
+	wkr[idx].did_val = did_val;
 	wkr[idx].sock_num = sock_num;
 	wkr[idx].msg_size = bytes;
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
-};
+}
 
-int msgTxCmd(struct cli_env *env, int argc, char **argv)
+static int msgTxCmd(struct cli_env *env, int argc, char **argv)
 {
 	return msg_tx_cmd(env, argc, argv, message_tx);
 }
@@ -1453,7 +1404,7 @@ msgTxCmd,
 ATTR_NONE
 };
 
-int msgTxLatCmd(struct cli_env *env, int argc, char **argv)
+static int msgTxLatCmd(struct cli_env *env, int argc, char **argv)
 {
 	return msg_tx_cmd(env, argc, argv, message_tx_lat);
 }
@@ -1474,7 +1425,7 @@ msgTxLatCmd,
 ATTR_NONE
 };
 
-int msgRxCmdExt(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type action)
+static int msgRxCmdExt(struct cli_env *env, int UNUSED(argc), char **argv, enum req_type action)
 {
 	uint16_t idx;
 	uint16_t sock_num;
@@ -1503,17 +1454,18 @@ int msgRxCmdExt(struct cli_env *env, int UNUSED(argc), char **argv, enum req_typ
 
 	wkr[idx].action = action;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = 0;
+	wkr[idx].did_val = 0;
 	wkr[idx].sock_num = sock_num;
 	wkr[idx].msg_size = bytes;
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
-};
+}
 
-int msgRxLatCmd(struct cli_env *env, int argc, char **argv)
+static int msgRxLatCmd(struct cli_env *env, int argc, char **argv)
 {
 	return msgRxCmdExt(env, argc, argv, message_rx_lat);
 }
@@ -1532,7 +1484,7 @@ msgRxLatCmd,
 ATTR_NONE
 };
 
-int msgRxCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int msgRxCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
 	uint16_t sock_num;
@@ -1550,14 +1502,15 @@ int msgRxCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 
 	wkr[idx].action = message_rx;
 	wkr[idx].action_mode = kernel_action;
-	wkr[idx].did = 0;
+	wkr[idx].did_val = 0;
 	wkr[idx].sock_num = sock_num;
 
 	wkr[idx].stop_req = 0;
 	sem_post(&wkr[idx].run);
+
 exit:
 	return 0;
-};
+}
 
 struct cli_cmd msgRx = {
 "msgRx",
@@ -1572,7 +1525,7 @@ msgRxCmd,
 ATTR_NONE
 };
 
-int msgTxOhCmd(struct cli_env *env, int argc, char **argv)
+static int msgTxOhCmd(struct cli_env *env, int argc, char **argv)
 {
 	return msg_tx_cmd(env, argc, argv, message_tx_oh);
 }
@@ -1593,7 +1546,7 @@ msgTxOhCmd,
 ATTR_NONE
 };
 
-int msgRxOhCmd(struct cli_env *env, int argc, char **argv)
+static int msgRxOhCmd(struct cli_env *env, int argc, char **argv)
 {
 	return msgRxCmdExt(env, argc, argv, message_rx_oh);
 }
@@ -1612,27 +1565,27 @@ msgRxOhCmd,
 ATTR_NONE
 };
 
-#define FLOAT_STR_SIZE 20
-
-int GoodputCmd(struct cli_env *env, int argc, char **UNUSED(argv))
+static int GoodputCmd(struct cli_env *env, int argc, char **UNUSED(argv))
 {
 	int i;
-	float MBps, Gbps, Msgpersec, link_occ; 
-	uint64_t byte_cnt = 0;
-	float tot_MBps = 0, tot_Gbps = 0, tot_Msgpersec = 0;
+	float MBps;
+	float Gbps;
+	float Msgpersec;
+	float link_occ;
+	uint64_t byte_cnt;
+	float tot_MBps = 0;
+	float tot_Gbps = 0;
+	float tot_Msgpersec = 0;
 	uint64_t tot_byte_cnt = 0;
-	char MBps_str[FLOAT_STR_SIZE],  Gbps_str[FLOAT_STR_SIZE];
+	char MBps_str[FLOAT_STR_SIZE];
+	char Gbps_str[FLOAT_STR_SIZE];
 	char link_occ_str[FLOAT_STR_SIZE];
 
-	LOGMSG(env,
-			"\n W STS <<<<--Data-->>>> --MBps-- -Gbps- Messages  Link_Occ\n");
+	LOGMSG(env, "\n W STS <<<<--Data-->>>> --MBps-- -Gbps- Messages  Link_Occ\n");
 
 	for (i = 0; i < MAX_WORKERS; i++) {
 		struct timespec elapsed;
 		uint64_t nsec;
-
-		MBps = Gbps = Msgpersec = 0;
-		byte_cnt = 0;
 
 		Msgpersec = wkr[i].perf_msg_cnt;
 		byte_cnt = wkr[i].perf_byte_cnt;
@@ -1642,15 +1595,15 @@ int GoodputCmd(struct cli_env *env, int argc, char **UNUSED(argv))
 
 		MBps = (float)(byte_cnt / (1024*1024)) / 
 			((float)nsec / 1000000000.0);
-		Gbps = (MBps * 8.0) / 1000.0;
+		Gbps = (MBps * 1024.0 * 1024.0 * 8.0) / 1000000000.0;
 		link_occ = Gbps/0.95;
 
 		memset(MBps_str, 0, FLOAT_STR_SIZE);
 		memset(Gbps_str, 0, FLOAT_STR_SIZE);
 		memset(link_occ_str, 0, FLOAT_STR_SIZE);
-		sprintf(MBps_str, "%4.3f", MBps);
-		sprintf(Gbps_str, "%2.3f", Gbps);
-		sprintf(link_occ_str, "%2.3f", link_occ);
+		snprintf(MBps_str, sizeof(MBps_str), "%4.3f", MBps);
+		snprintf(Gbps_str, sizeof(Gbps_str), "%2.3f", Gbps);
+		snprintf(link_occ_str, sizeof(link_occ_str), "%2.3f", link_occ);
 
 		LOGMSG(env, "%2d %3s %16lx %8s %6s %9.0f  %6s\n", i,
 				THREAD_STR(wkr[i].stat), byte_cnt, MBps_str,
@@ -1660,23 +1613,23 @@ int GoodputCmd(struct cli_env *env, int argc, char **UNUSED(argv))
 			tot_byte_cnt += byte_cnt;
 			tot_MBps += MBps;
 			tot_Gbps += Gbps;
-		};
+		}
 		tot_Msgpersec += Msgpersec;
 
 		if (argc) {
 			wkr[i].perf_byte_cnt = 0;
 			wkr[i].perf_msg_cnt = 0;
 			clock_gettime(CLOCK_MONOTONIC, &wkr[i].st_time);
-		};
-	};
+		}
+	}
+
+	link_occ = tot_Gbps/0.95;
 	memset(MBps_str, 0, FLOAT_STR_SIZE);
 	memset(Gbps_str, 0, FLOAT_STR_SIZE);
 	memset(link_occ_str, 0, FLOAT_STR_SIZE);
-	sprintf(MBps_str, "%4.3f", tot_MBps);
-	sprintf(Gbps_str, "%2.3f", tot_Gbps);
-	link_occ = tot_Gbps/0.95;
-
-	sprintf(link_occ_str, "%2.3f", link_occ);
+	snprintf(MBps_str, sizeof(MBps_str), "%4.3f", tot_MBps);
+	snprintf(Gbps_str, sizeof(Gbps_str), "%2.3f", tot_Gbps);
+	snprintf(link_occ_str, sizeof(link_occ_str), "%2.3f", link_occ);
 	LOGMSG(env, "Total  %16lx %8s %6s %9.0f  %6s\n", tot_byte_cnt, MBps_str,
 			Gbps_str, tot_Msgpersec, link_occ_str);
 
@@ -1695,18 +1648,14 @@ GoodputCmd,
 ATTR_RPT
 };
 
-int LatCmd(struct cli_env *env, int argc, char **argv)
+static int LatCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 {
 	int i;
 	char min_lat_str[FLOAT_STR_SIZE];
 	char avg_lat_str[FLOAT_STR_SIZE];
 	char max_lat_str[FLOAT_STR_SIZE];
 
-	if (0)
-		argv[0][0] = argc;
-
-	LOGMSG(env,
-			"\n W STS <<<<-Count-->>>> <<<<Min uSec>>>> <<<<Avg uSec>>>> <<<<Max uSec>>>>\n");
+	LOGMSG(env, "\n W STS <<<<-Count-->>>> <<<<Min uSec>>>> <<<<Avg uSec>>>> <<<<Max uSec>>>>\n");
 
 	for (i = 0; i < MAX_WORKERS; i++) {
 		uint64_t tot_nsec;
@@ -1719,24 +1668,25 @@ int LatCmd(struct cli_env *env, int argc, char **argv)
 				(wkr[i].tot_iter_time.tv_sec * 1000000000);
 
 		/* Note: divide by 2 to account for round trip latency. */
-		if (wkr[i].perf_iter_cnt)
+		if (wkr[i].perf_iter_cnt) {
 			avg_nsec = tot_nsec/divisor/wkr[i].perf_iter_cnt;
-		else
+		} else {
 			avg_nsec = 0;
+		}
 
 		memset(min_lat_str, 0, FLOAT_STR_SIZE);
 		memset(avg_lat_str, 0, FLOAT_STR_SIZE);
 		memset(max_lat_str, 0, FLOAT_STR_SIZE);
-		sprintf(min_lat_str, "%4.3f",
+		snprintf(min_lat_str, sizeof(min_lat_str), "%4.3f",
 			(float)(wkr[i].min_iter_time.tv_nsec/divisor)/1000.0); 
-		sprintf(avg_lat_str, "%4.3f", (float)avg_nsec/1000.0);
-		sprintf(max_lat_str, "%4.3f",
+		snprintf(avg_lat_str, sizeof(avg_lat_str), "%4.3f", (float)avg_nsec/1000.0);
+		snprintf(max_lat_str, sizeof(max_lat_str), "%4.3f",
 			(float)(wkr[i].max_iter_time.tv_nsec/divisor)/1000.0); 
 
 		LOGMSG(env, "%2d %3s %16ld %16s %16s %16s\n", i,
 				THREAD_STR(wkr[i].stat), wkr[i].perf_iter_cnt,
 				min_lat_str, avg_lat_str, max_lat_str);
-	};
+	}
 
 	return 0;
 }
@@ -1758,11 +1708,10 @@ static inline void display_cpu(struct cli_env *env, int cpu)
 		LOGMSG(env, "Any ");
 		return;
 	}
-
 	LOGMSG(env, "%3d ", cpu);
 }
 
-void display_gen_status(struct cli_env *env)
+static void display_gen_status(struct cli_env *env)
 {
 	LOGMSG(env, "\n W STS CPU RUN ACTION  MODE DID <<<<--ADDR-->>>> ByteCnt AccSize W H OB IB MB\n");
 
@@ -1773,15 +1722,15 @@ void display_gen_status(struct cli_env *env)
 		LOGMSG(env, 
 			"%7s %4s %3d %16lx %7lx %7lx %1d %1d %2d %2d %2d\n",
 			ACTION_STR(wkr[i].action), 
-			MODE_STR(wkr[i].action_mode), wkr[i].did,
+			MODE_STR(wkr[i].action_mode), wkr[i].did_val,
 			wkr[i].rio_addr, wkr[i].byte_cnt, wkr[i].acc_size, 
 			wkr[i].wr, wkr[i].mp_h_is_mine,
 			wkr[i].ob_valid, wkr[i].ib_valid, 
 			wkr[i].mb_valid);
-	};
+	}
 }
 
-void display_ibwin_status(struct cli_env *env)
+static void display_ibwin_status(struct cli_env *env)
 {
 	LOGMSG(env, "\n W STS CPU RUN ACTION  MODE IB <<<< HANDLE >>>> <<<<RIO ADDR>>>> <<<<  SIZE  >>>\n");
 
@@ -1798,7 +1747,7 @@ void display_ibwin_status(struct cli_env *env)
 	}
 }
 
-void display_msg_status(struct cli_env *env)
+static void display_msg_status(struct cli_env *env)
 {
 	int i;
 
@@ -1821,12 +1770,13 @@ void display_msg_status(struct cli_env *env)
 	}
 }
 
-int StatusCmd(struct cli_env *env, int argc, char **argv)
+static int StatusCmd(struct cli_env *env, int argc, char **argv)
 {
 	char sel_stat = 'g';
 
-	if (argc)
+	if (argc) {
 		sel_stat = argv[0][0];
+	}
 	
 	switch (sel_stat) {
 		case 'i':
@@ -1855,11 +1805,11 @@ struct cli_cmd Status = {
 0,
 "Display status of all threads",
 "status {i|m|s}\n"
-        "Optionally enter a character to select the status type:\n"
-        "i : IBWIN status\n"
-        "m : Messaging status\n"
-        "g : General status\n"
-        "Default is general status\n",
+	"Optionally enter a character to select the status type:\n"
+	"i : IBWIN status\n"
+	"m : Messaging status\n"
+	"g : General status\n"
+	"Default is general status\n",
 StatusCmd,
 ATTR_RPT
 };
@@ -1868,7 +1818,7 @@ int dump_idx;
 uint64_t dump_base_offset;
 uint64_t dump_size;
 
-int DumpCmd(struct cli_env *env, int argc, char **argv)
+static int DumpCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx;
 	uint64_t offset, base_offset;
@@ -1922,9 +1872,10 @@ int DumpCmd(struct cli_env *env, int argc, char **argv)
 			(uint8_t *)wkr[idx].ib_ptr + base_offset + offset));
 	}
 	LOGMSG(env, "\n");
+
 exit:
 	return 0;
-};
+}
 
 struct cli_cmd Dump = {
 "dump",
@@ -1939,7 +1890,7 @@ DumpCmd,
 ATTR_RPT
 };
 
-int FillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+static int FillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 {
 	uint16_t idx;
 	uint64_t offset, base_offset;
@@ -1964,7 +1915,7 @@ int FillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		goto exit;
 	}
 
-	if (tok_parse_ushort(argv[3], &tmp, 0, 0xff, 0)) {
+	if (tok_parse_ushort(argv[n++], &tmp, 0, 0xff, 0)) {
 		LOGMSG(env, "\n");
 		LOGMSG(env, TOK_ERR_USHORT_HEX_MSG_FMT, "<data>", 0, 0xff);
 		goto exit;
@@ -1989,6 +1940,7 @@ int FillCmd(struct cli_env *env, int UNUSED(argc), char **argv)
 		*(volatile uint8_t * volatile)
 		((uint8_t *)wkr[idx].ib_ptr + base_offset + offset) = data;
 	}
+
 exit:
 	return 0;
 }
@@ -2007,74 +1959,73 @@ FillCmd,
 ATTR_RPT
 };
 
-int MpdevsCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
+static int MpdevsCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 {
-        uint32_t *mport_list = NULL;
-        uint32_t *ep_list = NULL;
-        uint32_t *list_ptr;
-        uint32_t number_of_eps = 0;
-        uint8_t  number_of_mports = RIO_MAX_MPORTS;
-        uint32_t ep = 0;
-        int i;
-        int mport_id;
-        int ret = 0;
+	mport_list_t *mport_list = NULL;
+	mport_list_t *list_ptr;
+	uint8_t number_of_mports = RIO_MAX_MPORTS;
+	uint8_t mport_id;
 
-        ret = riomp_mgmt_get_mport_list(&mport_list, &number_of_mports);
-        if (ret) {
-                LOGMSG(env, "riomp_mgmt_get_mport_list ERR %d:%s\n",
-			ret, strerror(ret));
+	did_val_t *ep_list = NULL;
+	uint32_t number_of_eps = 0;
+	uint32_t ep;
+	int i;
+	int ret;
+
+	ret = riomp_mgmt_get_mport_list(&mport_list, &number_of_mports);
+	if (ret) {
+		LOGMSG(env, "riomp_mgmt_get_mport_list ERR %d:%s\n", ret,
+				strerror(ret));
 		goto exit;
-        }
+	}
 
-        LOGMSG(env, "\nAvailable %d local mport(s):\n", number_of_mports);
+	LOGMSG(env, "\nAvailable %d local mport(s):\n", number_of_mports);
 
-        if (number_of_mports > RIO_MAX_MPORTS) {
-                LOGMSG(env,
-			"WARNING: Only %d out of %d have been retrieved\n",
-			RIO_MAX_MPORTS, number_of_mports);
-        }
+	if (number_of_mports > RIO_MAX_MPORTS) {
+		LOGMSG(env, "WARNING: Only %d out of %d have been retrieved\n",
+				RIO_MAX_MPORTS, number_of_mports);
+	}
 
-        list_ptr = mport_list;
-        for (i = 0; i < number_of_mports; i++, list_ptr++) {
-                mport_id = *list_ptr >> 16;
-                LOGMSG(env, "+++ mport_id: %u dest_id: %u\n",
-                                mport_id, *list_ptr & 0xffff);
+	list_ptr = mport_list;
+	for (i = 0; i < number_of_mports; i++, list_ptr++) {
+		mport_id = *list_ptr >> 16;
+		LOGMSG(env, "+++ mport_id: %u dest_id: %u\n", mport_id,
+				*list_ptr & 0xffff);
 
-                /* Display EPs for this MPORT */
+		/* Display EPs for this MPORT */
 
-                ret = riomp_mgmt_get_ep_list(mport_id, &ep_list, &number_of_eps);
-                if (ret) {
-                        LOGMSG(env,
-				"ERR: riodp_ep_get_list() ERR %d: %s\n",
-				ret, strerror(ret));
-                        break;
-                }
-
-                printf("\t%u Endpoints (dest_ID): ", number_of_eps);
-                for (ep = 0; ep < number_of_eps; ep++) {
-                        LOGMSG(env, "%u ", *(ep_list + ep));
+		ret = riomp_mgmt_get_ep_list(mport_id, &ep_list,
+				&number_of_eps);
+		if (ret) {
+			LOGMSG(env, "ERR: riodp_ep_get_list() ERR %d: %s\n",
+					ret, strerror(ret));
+			break;
 		}
-                LOGMSG(env, "\n");
 
-                ret = riomp_mgmt_free_ep_list(&ep_list);
-                if (ret) {
-                        LOGMSG(env,
-				"ERR: riodp_ep_free_list() ERR %d: %s\n",
-				ret, strerror(ret));
-		};
+		printf("\t%u Endpoints (dest_ID): ", number_of_eps);
+		for (ep = 0; ep < number_of_eps; ep++) {
+			LOGMSG(env, "%u ", *(ep_list + ep));
+		}
+		LOGMSG(env, "\n");
 
-        }
+		ret = riomp_mgmt_free_ep_list(&ep_list);
+		if (ret) {
+			LOGMSG(env, "ERR: riodp_ep_free_list() ERR %d: %s\n",
+					ret, strerror(ret));
+		}
+
+	}
 
 	LOGMSG(env, "\n");
 
-        ret = riomp_mgmt_free_mport_list(&mport_list);
-        if (ret) {
-                LOGMSG(env,
-			"ERR: riodp_ep_free_list() ERR %d: %s\n",
-			ret, strerror(ret));
-	};
+	ret = riomp_mgmt_free_mport_list(&mport_list);
+	if (ret) {
+		LOGMSG(env, "ERR: riodp_ep_free_list() ERR %d: %s\n", ret,
+				strerror(ret));
+	}
+
 exit:
-        return 0;
+	return 0;
 }
 
 struct cli_cmd Mpdevs = {
@@ -2087,7 +2038,7 @@ MpdevsCmd,
 ATTR_NONE
 };
 
-int UTimeCmd(struct cli_env *env, int argc, char **argv)
+static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx, st_i = 0, end_i = MAX_TIMESTAMPS-1;
 	struct seq_ts *ts_p = NULL;
@@ -2115,7 +2066,7 @@ int UTimeCmd(struct cli_env *env, int argc, char **argv)
 	default:
 		LOGMSG(env, "\nFAILED: <type> not 'd', 'f' or 'm'\n");
 		goto exit;
-	};
+	}
 		
 	switch (argv[2][0]) {
 	case 's':
@@ -2156,31 +2107,31 @@ int UTimeCmd(struct cli_env *env, int argc, char **argv)
 
 	case 'p':
 	case 'P':
-		if (argc > 3) {
-			if (tok_parse_ushort(argv[3], &st_i, 0, MAX_TIMESTAMPS-1, 0)) {
-				LOGMSG(env, "\n");
-				LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "st_i", 0, MAX_TIMESTAMPS-1);
-				goto exit;
-			}
+		if ((argc > 3)&& (tok_parse_ushort(argv[3], &st_i, 0,
+						MAX_TIMESTAMPS - 1, 0))) {
+			LOGMSG(env, "\n");
+			LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "st_i", 0,
+					MAX_TIMESTAMPS-1);
+			goto exit;
 		}
-		if (argc > 4) {
-			if (tok_parse_ushort(argv[4], &end_i, 0, MAX_TIMESTAMPS-1, 0)) {
-				LOGMSG(env, "\n");
-				LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "end_i", 0, MAX_TIMESTAMPS-1);
-				goto exit;
-			}
+		if ((argc > 4)&& (tok_parse_ushort(argv[4], &end_i, 0,
+						MAX_TIMESTAMPS - 1, 0))) {
+			LOGMSG(env, "\n");
+			LOGMSG(env, TOK_ERR_USHORT_MSG_FMT, "end_i", 0,
+					MAX_TIMESTAMPS-1);
+			goto exit;
 		}
 
 		if (end_i < st_i) {
 			LOGMSG(env, "\nFAILED: End index is less than start index\n");
 			goto exit;
-		};
+		}
 
 		if (ts_p->ts_idx < MAX_TIMESTAMPS - 1) {
 			LOGMSG(env,
 				"\nWARNING: Last valid timestamp is %d\n",
 				ts_p->ts_idx);
-		};
+		}
 
 		LOGMSG(env,
 			"\nIdx ---->> Sec<<---- Nsec---mmmuuunnn Marker\n");
@@ -2189,7 +2140,7 @@ int UTimeCmd(struct cli_env *env, int argc, char **argv)
 				ts_p->ts_val[idx].tv_sec, 
 				ts_p->ts_val[idx].tv_nsec,
 				ts_p->ts_mkr[idx]);
-		};
+		}
 		break;
 
 	case 'l':
@@ -2238,6 +2189,7 @@ int UTimeCmd(struct cli_env *env, int argc, char **argv)
 	default:
 		LOGMSG(env, "FAILED: <cmd> not 's','p' or 'l'\n");
 	}
+
 exit:
 	return 0;
 }
@@ -2265,92 +2217,9 @@ UTimeCmd,
 ATTR_NONE
 };
 
-int getIsolCPU(std::vector<std::string>& cpus)
-{
-  FILE* f = popen("awk '{for(i=1;i<NF;i++){if($i~/isolcpus/){is=$i}}}END{split(is,a,/=/);c=a[2];n=split(c,b,/,/); for(i in b){print b[i]}}' /proc/cmdline", "re");
-	if(f == NULL) {
-		return -1;
-	}
-
-	int count = 0;
-
-	while(! feof(f)) {
-		char buf[257] = {0};
-		if (NULL == fgets(buf, 256, f)) {
-			break;
-		}
-
-		int N = strlen(buf);
-		if (N <= 0)
-			break;
-		if (buf[N-1] == '\n') {
-			buf[--N] = '\0';
-		}
-		if (N) {
-			if (buf[N-1] == '\r') {
-				buf[--N] = '\0';
-			}
-		}
-
-		cpus.push_back(buf);
-		count++;
-	}
-	pclose(f);
-
-	pclose(f);
-
-	return count;
-}
-
-int IsolcpuCmd(struct cli_env *env, int argc, char **argv)
-{
-	int minisolcpu = 0;
-
-	if (argc > 0)
-		minisolcpu = GetDecParm(argv[0], 0);
-
-	std::vector<std::string> cpus;
-
-	const int NI = getIsolCPU(cpus);
-
-	if (minisolcpu > 0 && NI < minisolcpu) {
-		CRIT("\n\tMinimum number of isolcpu cores (%d) not met, got %d. Bailing out!\n",
-		minisolcpu, NI);
-		return -1;
-	}
-
-
-	int c = 0;
-	char clist[140] = {0};
-	std::vector<std::string>::iterator it = cpus.begin();
-	for(; it != cpus.end(); it++) {
-		char tmp[9] = {0};
-		snprintf(tmp, 8, "cpu%d=%s", ++c, it->c_str());
-		SetEnvVar(tmp);
-		strncat(clist, it->c_str(), 128);
-		strncat(clist, " ", 128);
-	}
-
-	LOGMSG(env, "\nIsolcpus: %s\n", clist);
-
-	return 0;
-}
-
-struct cli_cmd Isolcpu = {
-"isolcpu",
-4,
-0,
-"Returns the number of islcpus and sets the cpu1...cpuN env vars",
-"<minisolcpu>\n"
-        "<minisolcpu> [optional] STOP execution if minimum number of isolcpus not met\n",
-IsolcpuCmd,
-ATTR_NONE
-};
-
 struct cli_cmd *goodput_cmds[] = {
 	&IBAlloc,
 	&IBDealloc,
-	&IBCheck,
 	&Dump,
 	&Fill,
 	&OBDIO,
@@ -2370,7 +2239,6 @@ struct cli_cmd *goodput_cmds[] = {
 	&Lat,
 	&Status,
 	&Thread,
-	&Isolcpu,
 	&Kill,
 	&Halt,
 	&Move,
@@ -2400,7 +2268,7 @@ void bind_goodput_cmds(void)
 
 	add_commands_to_cmd_db(sizeof(goodput_cmds) / sizeof(goodput_cmds[0]),
 			goodput_cmds);
-};
+}
 
 #ifdef __cplusplus
 }

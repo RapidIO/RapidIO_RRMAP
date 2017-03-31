@@ -38,7 +38,6 @@ export LOG_LEVEL
 DEBUG?=DEBUG
 export DEBUG
 
-# TODO This must go away
 TOP_LEVEL = $(shell pwd)
 
 TARGETS = common fabric_management rrmapcli goodput file_transfer 
@@ -61,6 +60,10 @@ file_transfer: common FORCE
 	$(MAKE) all -C utils/file_transfer
 
 FORCE:
+
+runtests: FORCE
+	$(MAKE) runtests -C common
+	$(MAKE) runtests -C fabric_management
 
 clean: FORCE
 	$(MAKE) clean -C common

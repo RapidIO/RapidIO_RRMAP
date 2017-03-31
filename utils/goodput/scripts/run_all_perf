@@ -39,5 +39,5 @@ echo device ID before this script can be run!!!
 // to automated regression software.
 
 log logs/MPORT_DIR/run_all_perf_done.log
-st
+status
 close

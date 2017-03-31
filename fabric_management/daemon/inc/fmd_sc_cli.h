@@ -1,4 +1,3 @@
-/* Fabric Management Daemon Statistics Counter commands */
 /*
 ****************************************************************************
 Copyright (c) 2014, Integrated Device Technology Inc.
@@ -32,8 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#ifndef __FMD_DEV_SC_CLI_H__
-#define __FMD_DEV_SC_CLI_H__
+#ifndef __FMD_SC_CLI_H__
+#define __FMD_SC_CLI_H__
+
+/**
+ * @file fmd_sc_cli.h
+ * Fabric Management Daemon Statistics Counter commands
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,4 +49,4 @@ void fmd_bind_dev_sc_cmds(void);
 }
 #endif
 
-#endif /* __FMD_DEV_SC_CLI_H__ */
+#endif /* __FMD_SC_CLI_H__ */

@@ -31,9 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#include "libcli.h"
+#include <stdbool.h>
+
 #include "rio_misc.h"
+#include "libcli.h"
 #include "string_util.h"
+#include "rrmap_fm.h"
+#include "liblog.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,17 +45,22 @@ extern "C" {
 
 int main(int UNUSED(argc), char **UNUSED(argv))
 {
-	
 	struct cli_env env;
-	
-	cli_init_base(NULL);
+
+	rdma_log_init(NULL, true);
+	cli_init_base(rrmap_fm_custom_quit);
 	init_cli_env(&env);
+	liblog_bind_cli_cmds();
+	libfmdd_init();
+	fmdd_bind_dbg_cmds();
 
 	SAFE_STRNCPY(env.prompt, "RRMAP_CLI> ", sizeof(env.prompt));
+	splashScreen(&env, (char *)"RapidIO RDMA Platform Terminal");
+	rrmap_fm_bind_cli_cmds();
 
-	splashScreen(&env,
-			(char *)"RapidIO RDMA Platform Terminal");
+	start_fm_thread();
 	cli_terminal(&env);
+	fmdd_destroy_handle(&dd_h);
 
 	exit(EXIT_SUCCESS);
 }

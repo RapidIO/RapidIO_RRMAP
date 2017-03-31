@@ -8,17 +8,17 @@ wait 5 D
 wait 6 D
 wait 7 D
 
-t 0 -1 0
+thread 0 -1 0
 wait 0 H
 
-mT 0 did skt_prefix9 msg_size
+mTxLat 0 did skt_prefix9 msg_size
 
 wait 0 R
 
-la
+lat
 echo MSG LATENCY msg_size BYTES TRANSMIT
 sleep wait_time
 wait 0 R
-st
+status
 echo MSG LATENCY msg_size BYTES TRANSMIT
-la
+lat

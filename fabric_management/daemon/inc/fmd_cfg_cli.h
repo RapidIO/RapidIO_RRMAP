@@ -1,4 +1,3 @@
-/* Fabric Management Daemon Configuration display and section commands */
 /*
 ****************************************************************************
 Copyright (c) 2014, Integrated Device Technology Inc.
@@ -32,8 +31,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************
 */
 
-#ifndef _FMD_CFG_CLI_H_
-#define _FMD_CFG_CLI_H_
+#ifndef __FMD_CFG_CLI_H__
+#define __FMD_CFG_CLI_H__
+
+/**
+ * @file fmd_cfg_cli.h
+ * Fabric Management Daemon Configuration display and section commands
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,4 +49,4 @@ void fmd_bind_dbg_cmds(void);
 }
 #endif
 
-#endif /* _FMD_CFG_CLI_H_ */
+#endif /* __FMD_CFG_CLI_H__ */

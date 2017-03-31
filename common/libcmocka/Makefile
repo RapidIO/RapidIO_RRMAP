@@ -33,15 +33,12 @@ TOPDIR?=$(shell pwd)/../..
 include $(TOPDIR)/rules.mk
 
 NAME:=cmocka
-TARGETS:=lib$(NAME).so
+TARGETS:=lib$(NAME).a
 
 OBJECTS:=$(patsubst src/%.c,src/%.o,$(wildcard src/*.c))
 
-LINK_FLAGS+= -rdynamic -shared -Wl,-soname,lib$(NAME).so.$(SOVER)
-LDFLAGS+=-L. -l$(NAME)
-
 # Keep clobbered as an acceptable warning, not our code...
-CFLAGS+=-Wno-error=clobbered
+CFLAGS+=-Wno-error=clobbered -Wno-error=maybe-uninitialized
 
 # begin cmocka config.h
 CFLAGS+=-DHAVE_ASSERT_H=1
@@ -95,10 +92,9 @@ CFLAGS+=-DWORDS_SIZEOF_VOID_P=8
 
 all: $(TARGETS)
 
-%.so: $(OBJECTS)
+%.a: $(OBJECTS)
 	@echo ---------- Building $@
-	$(CC) $(CFLAGS) -o $@.$(SOVER) $(OBJECTS) $(LINK_FLAGS)
-	@ln -s $@.$(SOVER) $@ &>/dev/null
+	$(AR) rcs $@ $^
 
 src/%.o: src/%.c
 	@echo ---------- Building $@
@@ -106,4 +102,5 @@ src/%.o: src/%.c
 
 clean:
 	@echo ---------- Cleaning lib$(NAME)...
-	rm -f $(TARGETS) lib$(NAME).so.$(SOVER) $(OBJECTS) inc/*~ src/*~ *~
+	rm -f $(TARGETS) $(OBJECTS) \
+	inc/*~ src/*~ *~

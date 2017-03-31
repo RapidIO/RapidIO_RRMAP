@@ -82,77 +82,77 @@
  * - DMA_SYNC3  : 0 - blocking, 1 - async, 2 - fire and forget
  *                Default is same as DMA_SYNC
  *
-* All results are found on the MAST node, in the
-* goodput/logs/mport{MAST_MPNUM} directory.
-* This directory contains the following after a successful test:
-* - label.res    : Information about regression parameters,
-*                  platform hardware, and execution time
-* - all_thru.res : Summary of all throughput measurementa, as described in
-*                  \ref thru_sum_res.
-* - all_lat.res  : Summary of all latency measurements, as described in
-*                  \ref thru_sum_res.
-* - detailed measurement logs with names ending in ".log".
-*   For more information on the individual throughput measurements,
-*   refer to \ref goodput_cmd_overview_secn.
-*   For more information on the individual latency measurements,
-*   refer to \ref latency_cmd_overview_secn.
-* - results summary files, ending in ".res", for each detailed
-*   measurement log file.  For information on the latency and
-*   throughput results file data, refer to \ref lat_sum_res and 
-*   \ref thru_sum_res.
-*
-* \subsubsection lat_sum_res Latency Summary Results
-*
-* Latency results are summarized using the following format:
-* <pre>
-* Processing latency log file :  obwin_lat_read.log
-* Output filename is          :  obwin_lat_read.log.res
-* SIZE     Transfers   Min_Usecs   Avg_Usecs   Max_Usecs
-*        1  15614082       1.779       1.864      31.432
-*        2  15694459       1.780       1.854     569.849
-*        4  15690140       1.781       1.854      76.678
-*        8  15690714       1.784       1.854     124.708
-* </pre>
-*
-* The columns have the following meaning:
-* - SIZE: Hexadecimal size of the transactions, powers of 2 from 1 up to 4 MB
-* - Transfers: Number of transfers used in the latency computation
-* - Min_Usecs: Minimum number of microseconds to complete one transfer
-* - Avg_Usecs: Average number of microseconds to complete one transfer
-* - Max_Usecs: Maximum number of microseconds to complete one transfer
-* Note that Max_Usecs is a measurement of operating system/scheduler latency.
-* Minimum and average latency figures indicate the usual performance for
-* each transaction.
-*
-* \subsubsection thru_sum_res Throughput Summary Results
-*
-* Throughput results are summarized using the following format:
-* <pre>
-* Processing througput log file :  pdma_thru_pdm_write.log
-* Output filename is            :  pdma_thru_pdm_write.log.res
-* SIZE        MBps     Gbps   LinkOcc  AvailCPU  UserCPU  KernCPU CPU OCC %
-*     4000  1547.073   12.377   13.028    10262       71     3217   128.16
-*     8000  1572.036   12.576   13.238    11225       52     1408    52.03
-*    10000  1585.969   12.688   13.356    11615       50      725    26.69
-*    20000  1591.853   12.735   13.405    11818       38      431    15.87
-*    40000  1573.115   12.585   13.247    11850       48      313    12.19
-*    80000  1562.327   12.499   13.156    11880       46      242     9.70
-*   100000  1580.099   12.641   13.306    11920       26      149     5.87
-*   200000  1592.371   12.739   13.409    11947       15       95     3.68
-*   400000  1596.779   12.774   13.447    11968        7       49     1.87
-* </pre>
-*
-* The columns have the following meaning:
-* - SIZE – Hexadecimal size of the transactions, powers of 2 from 1 up to 4 MB
-* - MBps – Goodput, payload data transferred.
-* - GBps – Goodput, MBps * 8
-* - LincOcc – Estimate of amount of bandwidth used on the link by packets
-* - AvailCPU: Ticks of processing time available in the measurement period,
-*             where each tick is 1/100th of a second.
-*             Each processor core contributes 100 ticks per second.
-* - UserCPU: Ticks spent in the measurement process (goodput)
-* - KernCPU – Ticks spent in the kernel
-* - CPU OCC % - Percentage of the CPU used by the measurement process.
+ * All results are found on the MAST node, in the
+ * goodput/logs/mport{MAST_MPNUM} directory.
+ * This directory contains the following after a successfull test:
+ * - label.res    : Information about regression parameters,
+ *                  platform hardware, and execution time
+ * - all_thru.res : Summary of all throughput measurement, as described in
+ *                  \ref thru_sum_res.
+ * - all_lat.res  : Summary of all latency measurements, as described in
+ *                  \ref thru_sum_res.
+ * - detailed measurement logs with names ending in ".log".
+ *   For more information on the individual throughput measurements,
+ *   refer to \ref goodput_cmd_overview_secn.
+ *   For more information on the individual latency measurements,
+ *   refer to \ref latency_cmd_overview_secn.
+ * - results summary files, ending in ".res", for each detailed
+ *   measurement log file.  For information on the latency and
+ *   throughput results file data, refer to \ref lat_sum_res and
+ *   \ref thru_sum_res.
+ *
+ * \subsubsection lat_sum_res Latency Summary Results
+ *
+ * Latency results are summarized using the following format:
+ * <pre>
+ * Processing latency log file :  obwin_lat_read.log
+ * Output filename is          :  obwin_lat_read.log.res
+ * SIZE     Transfers   Min_Usecs   Avg_Usecs   Max_Usecs
+ *        1  15614082       1.779       1.864      31.432
+ *        2  15694459       1.780       1.854     569.849
+ *        4  15690140       1.781       1.854      76.678
+ *        8  15690714       1.784       1.854     124.708
+ * </pre>
+ *
+ * The columns have the following meaning:
+ * - SIZE: Hexadecimal size of the transactions, powers of 2 from 1 up to 4 MB
+ * - Transfers: Number of transfers used in the latency computation
+ * - Min_Usecs: Minimum number of microseconds to complete one transfer
+ * - Avg_Usecs: Average number of microseconds to complete one transfer
+ * - Max_Usecs: Maximum number of microseconds to complete one transfer
+ * Note that Max_Usecs is a measurement of operating system/scheduler latency.
+ * Minimum and average latency figures indicate the usual performance for
+ * each transaction.
+ *
+ * \subsubsection thru_sum_res Throughput Summary Results
+ *
+ * Throughput results are summarized using the following format:
+ * <pre>
+ * Processing througput log file :  pdma_thru_pdm_write.log
+ * Output filename is            :  pdma_thru_pdm_write.log.res
+ * SIZE        MBps     Gbps   LinkOcc  AvailCPU  UserCPU  KernCPU CPU OCC %
+ *     4000  1547.073   12.377   13.028    10262       71     3217   128.16
+ *     8000  1572.036   12.576   13.238    11225       52     1408    52.03
+ *    10000  1585.969   12.688   13.356    11615       50      725    26.69
+ *    20000  1591.853   12.735   13.405    11818       38      431    15.87
+ *    40000  1573.115   12.585   13.247    11850       48      313    12.19
+ *    80000  1562.327   12.499   13.156    11880       46      242     9.70
+ *   100000  1580.099   12.641   13.306    11920       26      149     5.87
+ *   200000  1592.371   12.739   13.409    11947       15       95     3.68
+ *   400000  1596.779   12.774   13.447    11968        7       49     1.87
+ * </pre>
+ *
+ * The columns have the following meaning:
+ * - SIZE - Hexadecimal size of the transactions, powers of 2 from 1 up to 4 MB
+ * - MBps - Goodput, payload data transferred.
+ * - GBps - Goodput, MBps * 8
+ * - LincOcc - Estimate of amount of bandwidth used on the link by packets
+ * - AvailCPU: Ticks of processing time available in the measurement period,
+ *             where each tick is 1/100th of a second.
+ *             Each processor core contributes 100 ticks per second.
+ * - UserCPU: Ticks spent in the measurement process (goodput)
+ * - KernCPU - Ticks spent in the kernel
+ * - CPU OCC % - Percentage of the CPU used by the measurement process.
  *
  * \subsection exec_sec Running Goodput
  * Goodput contains all functionality and commands to verify and measure kernel
@@ -994,3 +994,8 @@
  *
  * msgTx 7 5 1234 2048
  */
+
+#ifndef __GOODPUT_INTRO_H__
+#define __GOODPUT_INTRO_H__
+
+#endif /* __GOODPUT_INTRO_H__ */

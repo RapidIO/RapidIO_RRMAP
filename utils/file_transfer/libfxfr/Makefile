@@ -45,9 +45,11 @@ all: $(TARGETS)
 
 src/%.o: src/%.c $(HEADERS)
 	$(CC) -c $(CFLAGS) $< -o $@ \
-	-I$(FMDDIR)/librio_switch/inc -I$(FMDDIR)/libdid/inc -I$(FMDDIR)/libct/inc
+	-I$(FMDDIR)/librio/inc
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) inc/*~ src/*~ *~ *.a
+	@echo ---------- Cleaning lib$(NAME)...
+	rm -f $(TARGETS) $(OBJECTS) \
+	inc/*~ src/*~ *~
 
 .PHONY: all clean

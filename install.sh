@@ -3,17 +3,25 @@
 # Files required for installation
 # Note the names of these file name (different root) are also used by make_install.sh
 #
+REMOTE_ROOT="/opt/rapidio/.install"
+LOCAL_SOURCE_ROOT="$(pwd)"
+SCRIPTS_PATH=$LOCAL_SOURCE_ROOT/install
+
 NODEDATA_FILE="nodeData.txt"
 SRC_TAR="rapidio_sw.tar"
 TMPL_FILE="config.tmpl"
 
+MY_USERID=root
+
+PGM_NAME=install.sh
+PGM_NUM_PARMS=8
 
 # Validate input
 #
 PRINTHELP=0
 
-if [ "$#" -lt 8 ]; then
-    echo $'\ninstall.sh requires 8 parameters.\n'
+if [ "$#" -lt $PGM_NUM_PARMS ]; then
+    echo $'\n$PGM_NAME requires $PGM_NUM_PARMS parameters.\n'
     PRINTHELP=1
 else
     SERVER=$1
@@ -29,14 +37,18 @@ else
         PRINTHELP=1
     fi
 
-    if [ $SW_TYPE != 'PD_tor' -a $SW_TYPE != 'SB_re' -a $SW_TYPE != 'AUTO' -a $SW_TYPE != 'RXS' ] ; then
-        echo $'\nsw parameter must be PD_tor, SB_re, AUTO or RXS.\n'
+    MASTER_CONFIG_FILE=$SCRIPTS_PATH/$SW_TYPE-master.conf
+    MASTER_MAKE_FILE=$SCRIPTS_PATH/$SW_TYPE-master-make.sh
+
+    if [ ! -e "$MASTER_CONFIG_FILE" ] || [ ! -e "$MASTER_MAKE_FILE" ]
+    then
+        echo $'\nSwitch type \"$SW_TYPE\" configuration support files do not exist.\n'
         PRINTHELP=1
     fi
 fi
 
 if [ $PRINTHELP = 1 ] ; then
-    echo "install.sh <SERVER> <NODE1> <NODE2> <NODE3> <NODE4> <memsz> <sw> <group> <rel>"
+    echo "$PGM_NAME <SERVER> <NODE1> <NODE2> <NODE3> <NODE4> <memsz> <sw> <group> <rel>"
     echo "<SERVER> Name of the node providing the files required by installation"
     echo "<NODE1>  Name of master, enumerating node"
     echo "<NODE2>  Name of slave node connected to Switch Port 2"
@@ -46,10 +58,11 @@ if [ $PRINTHELP = 1 ] ; then
     echo "<memsz>  RapidIO memory size, one of mem34, mem50, mem66"
     echo "         If any node has more than 8 GB of memory, MUST use mem50"
     echo "<sw>     Type of switch the four nodes are connected to."
-    echo "         PD_tor - Prodrive Technologies Top of Rack Switch"
-    echo "         SB_re  - StarBridge Inc RapidExpress Switch"
-    echo "         AUTO   - configuration determined at runtime"
-    echo "         RXS    - RXS configuration"
+    echo "         Files exist for the following switch types:"
+    echo "         tor  - Prodrive Technologies Top of Rack Switch"
+    echo "         cps  - StarBridge Inc RapidExpress Switch"
+    echo "         auto - configuration determined at runtime"
+    echo "         rxs  - StarBridge Inc RXS RapidExpress Switch"
     echo "<group>  Unix file ownership group which should have access to"
     echo "         the RapidIO software"
     echo "<rel>    The software release/version to install."
@@ -62,10 +75,11 @@ fi
 #
 echo "Prepare for installation..."
 echo "Checking connectivity..."
+OK=1
 ping -c 1 $SERVER > /dev/null
 if [ $? -ne 0 ]; then
-    echo "    $SERVER not accessible, exiting..."
-    exit
+    echo "    $SERVER not accessible"
+    OK=0
 else
     echo "    $SERVER accessible."
 fi
@@ -76,19 +90,24 @@ do
     [ "$host" = "$SERVER" ] && continue;
     ping -c 1 $host > /dev/null
     if [ $? -ne 0 ]; then
-        echo "    $host not accessible, exiting..."
-        exit
+        echo "    $host not accessible"
+        OK=0
     else
         echo "    $host accessible."
     fi
 done
 
+if [ $OK -eq 0 ]; then
+    echo "\nCould not connect to all nodes, exiting..."
+    exit
+fi
+
 
 echo "Creating install files for $SERVER..."
 # First create the files that would be available on the server
 #
-ROOT="/tmp/$$"
-rm -rf $ROOT;mkdir -p $ROOT
+TMP_DIR="/tmp/$$"
+rm -rf $TMP_DIR;mkdir -p $TMP_DIR
 
 # Create nodeData.txt
 #
@@ -98,67 +117,54 @@ for host in "${ALLNODES[@]}"; do
     [ "$host" = 'none' ] && continue
     LINE="$host $host node$c"
     if [ $c -eq 1 ] ; then
-        echo "master $LINE" >> $ROOT/$NODEDATA_FILE
+        echo "master $LINE" >> $TMP_DIR/$NODEDATA_FILE
         MASTER=$host
     else
-        echo "slave $LINE" >> $ROOT/$NODEDATA_FILE
+        echo "slave $LINE" >> $TMP_DIR/$NODEDATA_FILE
     fi
 done
 
 # Create the source.tar
 #
+pushd $LOCAL_SOURCE_ROOT &> /dev/null
 make clean &>/dev/null
-tar -cf $ROOT/$SRC_TAR * .git* &>/dev/null
+tar -cf $TMP_DIR/$SRC_TAR * .git* &>/dev/null
+popd &> /dev/null
 
 # Copy the template file
 #
-if [ "$SW_TYPE" = 'AUTO' ]; then
-    MASTER_CONFIG_FILE=auto-master.conf
-    MASTER_MAKE_FILE=auto-master-make.sh
-elif [ "$SW_TYPE" = 'SB_re' ]; then
-    MASTER_CONFIG_FILE=node-master.conf
-    MASTER_MAKE_FILE=node-master-make.sh
-elif [ "$SW_TYPE" = 'PD_tor' ]; then
-    MASTER_CONFIG_FILE=tor-master.conf
-    MASTER_MAKE_FILE=tor-master-make.sh
-elif [ "$SW_TYPE" = 'RXS' ]; then
-    MASTER_CONFIG_FILE=rxs-master.conf
-    MASTER_MAKE_FILE=rxs-master-make.sh
-fi
-cp install/$MASTER_CONFIG_FILE $ROOT/$TMPL_FILE
+cp $MASTER_CONFIG_FILE $TMP_DIR/$TMPL_FILE
 
 # Transfer the files to the server
 #
 echo "Transferring install files to $SERVER..."
 SERVER_ROOT="/opt/rapidio/.server"
-ssh root@"$SERVER" "rm -rf $SERVER_ROOT;mkdir -p $SERVER_ROOT"
-scp $ROOT/* root@"$SERVER":$SERVER_ROOT/. > /dev/null
-ssh root@"$SERVER" "chown -R root.$GRP $SERVER_ROOT"
-rm -rf $ROOT
+ssh $MY_USERID@"$SERVER" "rm -rf $SERVER_ROOT;mkdir -p $SERVER_ROOT"
+scp $TMP_DIR/* $MY_USERID@"$SERVER":$SERVER_ROOT/. > /dev/null
+ssh $MY_USERID@"$SERVER" "chown -R root.$GRP $SERVER_ROOT"
+rm -rf $TMP_DIR
 
 # Transfer the make_install.sh script to a known location on the target machines
 #
-INSTALL_ROOT="/opt/rapidio/.install"
-SCRIPTS_PATH="$(pwd)"/install
 for host in "${ALLNODES[@]}"; do
     [ "$host" = 'none' ] && continue;
     echo "Transferring install script to $host..."
-    ssh root@"$host" "rm -rf $INSTALL_ROOT;mkdir -p $INSTALL_ROOT/script"
-    scp $SCRIPTS_PATH/make_install_common.sh root@"$host":$INSTALL_ROOT/script/make_install_common.sh > /dev/null
+    ssh $MY_USERID@"$host" "rm -rf $REMOTE_ROOT;mkdir -p $REMOTE_ROOT/script"
+    scp $SCRIPTS_PATH/make_install_common.sh $MY_USERID@"$host":$REMOTE_ROOT/script/make_install_common.sh > /dev/null
     if [ "$host" = "$MASTER" ]; then
-        scp $SCRIPTS_PATH/$MASTER_MAKE_FILE root@"$host":$INSTALL_ROOT/script/make_install.sh > /dev/null
+        scp $MASTER_MAKE_FILE $MY_USERID@"$host":$REMOTE_ROOT/script/make_install.sh > /dev/null
     else
-        scp $SCRIPTS_PATH/make_install-slave.sh root@"$host":$INSTALL_ROOT/script/make_install.sh > /dev/null
+        scp $SCRIPTS_PATH/make_install-slave.sh $MY_USERID@"$host":$REMOTE_ROOT/script/make_install.sh > /dev/null
     fi
-    ssh root@"$host" "chown -R root.$GRP $INSTALL_ROOT;chmod 755 $INSTALL_ROOT/script/make_install.sh"
+    ssh $MY_USERID@"$host" "chown -R root.$GRP $REMOTE_ROOT;chmod 755 $REMOTE_ROOT/script/make_install.sh"
 done
 
 
 # Call out to make_install.sh
 echo "Beginning installation..."
-for host in  "${ALLNODES[@]}"; do
+for host in "${ALLNODES[@]}"; do
     [ "$host" = 'none' ] && continue;
-    ssh root@"$host" "$INSTALL_ROOT/script/make_install.sh $SERVER $SERVER_ROOT $MEMSZ $GRP"
+    ssh $MY_USERID@"$host" "$REMOTE_ROOT/script/make_install.sh $SERVER $SERVER_ROOT $MEMSZ $GRP"
 done
 
 echo "Installation complete."

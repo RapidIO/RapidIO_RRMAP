@@ -55,6 +55,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <netinet/tcp.h>
 #include <pthread.h>
 
+#include "rio_misc.h"
 #include "tok_parse.h"
 #include "libcli.h"
 #include "liblog.h"
@@ -77,21 +78,11 @@ struct riomp_mgmt_mport_properties qresp;
 
 struct worker wkr[MAX_WORKERS];
 
-void goodput_thread_shutdown(struct cli_env *env)
+void goodput_thread_shutdown(struct cli_env *UNUSED(env))
 {
-	int i;
-
-	if (0)
-		env = env + 1;
-
-	for (i = 0; i < MAX_WORKERS; i++)
-		shutdown_worker_thread(&wkr[i]);
-
-	if (mp_h_valid) {
-		riomp_mgmt_mport_destroy_handle(&mp_h);
-		mp_h_valid = 0;
-	};
-};
+	printf("\nGoodput Evaluation Application EXITING!!!!\n");
+	exit(EXIT_SUCCESS);
+}
 
 int setup_mport(int mport_num)
 {
@@ -100,7 +91,7 @@ int setup_mport(int mport_num)
 	if (mp_h_valid) {
 		riomp_mgmt_mport_destroy_handle(&mp_h);
 		mp_h_valid = 0;
-	};
+	}
 
 	mp_h_num = mport_num;
 	rc = riomp_mgmt_mport_create_handle(mport_num, 0, &mp_h);
@@ -112,20 +103,24 @@ int setup_mport(int mport_num)
 		mp_h_qresp_valid = 1;
 
 	return rc;
-};
+}
 
 void sig_handler(int signo)
 {
-	printf("\nRx Signal %x\n", signo);
-	if ((signo == SIGINT) || (signo == SIGHUP) || (signo == SIGTERM)) {
-		printf("Shutting down\n");
+	switch (signo) {
+	case SIGINT:
+	case SIGHUP:
+	case SIGTERM:
+	case SIGUSR1:
 		goodput_thread_shutdown(NULL);
-	};
-};
+		break;
+	default:
+		break;
+	}
+}
 
 int main(int argc, char *argv[])
 {
-	int rc = EXIT_FAILURE;
 	uint32_t mport_num = 0;
 
 	char* rc_script = NULL;
@@ -136,29 +131,31 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, sig_handler);
 	signal(SIGUSR1, sig_handler);
 
-	if (argc > 1) {
-		if (tok_parse_mport_id(argv[1], &mport_num, 0)) {
-			printf(TOK_ERR_MPORT_MSG_FMT);
-			exit(EXIT_FAILURE);
-		}
+	if ((argc > 1) && (tok_parse_mport_id(argv[1], &mport_num, 0))) {
+		printf(TOK_ERR_MPORT_MSG_FMT);
+		exit(EXIT_FAILURE);
 	}
 
-	for(int n = 2; n < argc; n++) {
+	for (int n = 2; n < argc; n++) {
 		const char* arg = argv[n];
-		if(! strcmp(arg,"--rc")) {
-		       if (n == (argc-1)) continue;
-		       rc_script = argv[++n];
-		       continue;
+		if (!strcmp(arg, "--rc")) {
+			if (n == (argc - 1)) {
+				continue;
+			}
+			rc_script = argv[++n];
+			continue;
 		}
-		if(! strstr(arg,"=")) continue;
+		if (!strstr(arg, "=")) {
+			continue;
+		}
 		SetEnvVar((char *)arg);
-        }
+	}
 
 	rdma_log_init("goodput_log.txt", 1);
 	if (setup_mport(mport_num)) {
 		printf("\nCould not open mport %d, exiting\n", mport_num);
 		exit(EXIT_FAILURE);
-	};
+	}
 
 	for (int i = 0; i < MAX_WORKERS; i++)
 		init_worker_info(&wkr[i], 1);
@@ -183,15 +180,7 @@ int main(int argc, char *argv[])
 
 	goodput_thread_shutdown(NULL);
 
-        if (mp_h_valid) {
-                riomp_mgmt_mport_destroy_handle(&mp_h);
-		mp_h_valid = 0;
-	};
-
-	printf("\nGoodput Evaluation Application EXITING!!!!\n");
-	rc = EXIT_SUCCESS;
-
-	exit(rc);
+	exit(EXIT_SUCCESS);
 }
 
 #ifdef __cplusplus
