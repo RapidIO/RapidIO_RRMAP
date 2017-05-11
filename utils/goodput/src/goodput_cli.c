@@ -51,6 +51,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "liblog.h"
 #include "assert.h"
 #include "math_util.h"
+#include "CPS1848.h"
+#include "RXS2448.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,6 +69,7 @@ char *req_type_str[(int)last_action+1] = {
 	(char *)"DmaNum",
 	(char *)"dT_Lat",
 	(char *)"dR_Lat",
+	(char *)"dR_Gpt",
 	(char *)"MSG_Tx",
 	(char *)"mT_Lat",
 	(char *)"mTx_Oh",
@@ -310,7 +313,7 @@ struct cli_cmd Move = {
 2,
 "Move a thread to a different CPU",
 "move <idx> <cpu>\n"
-	"<idx> is a worker index from 0 to " STR(MAX_WORKER_IDX)",\n" 
+	"<idx> is a worker index from 0 to " STR(MAX_WORKER_IDX)",\n"
 	"<cpu> is a cpu number, or -1 to indicate no cpu affinity\n",
 MoveCmd,
 ATTR_NONE
@@ -515,7 +518,7 @@ static void cpu_occ_parse_proc_line(char *file_line, uint64_t *proc_new_utime,
 	char *delim = (char *)" ";
 	int tok_cnt = 0;
 	char fl_cpy[CPUOCC_BUFF_SIZE];
-	
+
 	SAFE_STRNCPY(fl_cpy, file_line, sizeof(fl_cpy));
 	tok = strtok_r(file_line, delim, &saveptr);
 	while ((NULL != tok) && (tok_cnt < 13)) {
@@ -550,14 +553,14 @@ static void cpu_occ_parse_stat_line(char *file_line, uint64_t *p_user,
 	char *tok, *saveptr;
 	char *delim = (char *)" ";
 	char fl_cpy[CPUOCC_BUFF_SIZE];
-	
+
 	SAFE_STRNCPY(fl_cpy, file_line, sizeof(fl_cpy));
-	
+
 	/* Throw the first token away. */
 	tok = strtok_r(file_line, delim, &saveptr);
 	if (NULL == tok)
 		goto error;
-	
+
 	tok = strtok_r(NULL, delim, &saveptr);
 	if (NULL == tok)
 		goto error;
@@ -599,7 +602,7 @@ static void cpu_occ_parse_stat_line(char *file_line, uint64_t *p_user,
 		goto error;
 	if (tok_parse_ull(tok, p_softirq, 0))
 		goto error;
-	
+
 	return;
 error:
 	ERR("\nFAILED: stat_line \"%s\"\n", fl_cpy);
@@ -650,7 +653,7 @@ static int cpu_occ_set(uint64_t *tot_jifis, uint64_t *proc_kern_jifis,
 
 	cpu_occ_parse_proc_line(file_line, proc_user_jifis, proc_kern_jifis);
 
-		
+
 	memset(file_line, 0, sizeof(file_line));
 	if (NULL == fgets(file_line, sizeof(file_line), cpu_stat_fp)) {
 		ERR("Unexpected EOF 2: %d %s\n", errno, strerror(errno));
@@ -696,7 +699,7 @@ struct cli_cmd CPUOccSet = {
 0,
 "Set CPU Occupancy measurement start point.",
 "oset\n"
-	"No parameters\n", 
+	"No parameters\n",
 CPUOccSetCmd,
 ATTR_NONE
 };
@@ -823,7 +826,7 @@ static int obdio_cmd(struct cli_env *env, int UNUSED(argc), char **argv,
 	wkr[idx].ob_byte_cnt = min_obwin_size;
 	if ((direct_io == action) && (bytes > min_obwin_size)) {
 		wkr[idx].ob_byte_cnt = roundup_pw2(bytes);
-		if (!wkr[idx].ob_byte_cnt) { 
+		if (!wkr[idx].ob_byte_cnt) {
 			LOGMSG(env, "\nInvalid outbound window size\n");
 			goto exit;
 		}
@@ -1326,6 +1329,54 @@ dmaRxLatCmd,
 ATTR_NONE
 };
 
+static int dmaRxGoodputCmd(struct cli_env *env, int UNUSED(argc), char **argv)
+{
+	uint16_t idx;
+	uint64_t bytes;
+
+	int n = 0;
+	if (gp_parse_worker_index_check_thread(env, argv[n++], &idx, 1)) {
+		goto exit;
+	}
+
+	if (tok_parse_ulonglong(argv[n++], &bytes, 1, UINT32_MAX, 0)) {
+		LOGMSG(env, "\n");
+		LOGMSG(env, TOK_ERR_ULONGLONG_HEX_MSG_FMT, "<bytes>",
+				(uint64_t )1, (uint64_t)UINT32_MAX);
+		goto exit;
+	}
+
+	wkr[idx].action = dma_rx_gp;
+	wkr[idx].action_mode = kernel_action;
+	wkr[idx].byte_cnt = bytes;
+	wkr[idx].acc_size = bytes;
+
+	if (bytes < MIN_RDMA_BUFF_SIZE) {
+		wkr[idx].rdma_buff_size = MIN_RDMA_BUFF_SIZE;
+	} else {
+		wkr[idx].rdma_buff_size = bytes;
+	}
+
+	wkr[idx].stop_req = 0;
+	sem_post(&wkr[idx].run);
+
+exit:
+	return 0;
+}
+
+struct cli_cmd dmaRxGoodput = {
+"dRxGoodput",
+2,
+2,
+"Measure bytes received from other nodes DMA.\n",
+"dRxLat <idx> <bytes>\n"
+	"<idx>      is a worker index from 0 to " STR(MAX_WORKER_IDX) "\n"
+	"<bytes>    total bytes in each transfer\n"
+	"\nNOTE: The dRxGoodput command must be run before dTx!\n",
+dmaRxGoodputCmd,
+ATTR_NONE
+};
+
 static void roundoff_message_size(uint32_t *bytes)
 {
 	if (*bytes > 4096) {
@@ -1593,7 +1644,7 @@ static int GoodputCmd(struct cli_env *env, int argc, char **UNUSED(argv))
 		elapsed = time_difference(wkr[i].st_time, wkr[i].end_time);
 		nsec = elapsed.tv_nsec + (elapsed.tv_sec * 1000000000);
 
-		MBps = (float)(byte_cnt / (1024*1024)) / 
+		MBps = (float)(byte_cnt / (1024*1024)) /
 			((float)nsec / 1000000000.0);
 		Gbps = (MBps * 1024.0 * 1024.0 * 8.0) / 1000000000.0;
 		link_occ = Gbps/0.95;
@@ -1678,10 +1729,10 @@ static int LatCmd(struct cli_env *env, int UNUSED(argc), char **UNUSED(argv))
 		memset(avg_lat_str, 0, FLOAT_STR_SIZE);
 		memset(max_lat_str, 0, FLOAT_STR_SIZE);
 		snprintf(min_lat_str, sizeof(min_lat_str), "%4.3f",
-			(float)(wkr[i].min_iter_time.tv_nsec/divisor)/1000.0); 
+			(float)(wkr[i].min_iter_time.tv_nsec/divisor)/1000.0);
 		snprintf(avg_lat_str, sizeof(avg_lat_str), "%4.3f", (float)avg_nsec/1000.0);
 		snprintf(max_lat_str, sizeof(max_lat_str), "%4.3f",
-			(float)(wkr[i].max_iter_time.tv_nsec/divisor)/1000.0); 
+			(float)(wkr[i].max_iter_time.tv_nsec/divisor)/1000.0);
 
 		LOGMSG(env, "%2d %3s %16ld %16s %16s %16s\n", i,
 				THREAD_STR(wkr[i].stat), wkr[i].perf_iter_cnt,
@@ -1719,13 +1770,13 @@ static void display_gen_status(struct cli_env *env)
 		LOGMSG(env, "%2d %3s ", i, THREAD_STR(wkr[i].stat));
 		display_cpu(env, wkr[i].wkr_thr.cpu_req);
 		display_cpu(env, wkr[i].wkr_thr.cpu_run);
-		LOGMSG(env, 
+		LOGMSG(env,
 			"%7s %4s %3d %16lx %7lx %7lx %1d %1d %2d %2d %2d\n",
-			ACTION_STR(wkr[i].action), 
+			ACTION_STR(wkr[i].action),
 			MODE_STR(wkr[i].action_mode), wkr[i].did_val,
-			wkr[i].rio_addr, wkr[i].byte_cnt, wkr[i].acc_size, 
+			wkr[i].rio_addr, wkr[i].byte_cnt, wkr[i].acc_size,
 			wkr[i].wr, wkr[i].mp_h_is_mine,
-			wkr[i].ob_valid, wkr[i].ib_valid, 
+			wkr[i].ob_valid, wkr[i].ib_valid,
 			wkr[i].mb_valid);
 	}
 }
@@ -1738,11 +1789,11 @@ static void display_ibwin_status(struct cli_env *env)
 		LOGMSG(env, "%2d %3s ", i, THREAD_STR(wkr[i].stat));
 		display_cpu(env, wkr[i].wkr_thr.cpu_req);
 		display_cpu(env, wkr[i].wkr_thr.cpu_run);
-		LOGMSG(env, 
+		LOGMSG(env,
 			"%7s %4s %2d %16lx %16lx %15lx\n",
-			ACTION_STR(wkr[i].action), 
-			MODE_STR(wkr[i].action_mode), 
-			wkr[i].ib_valid, wkr[i].ib_handle, wkr[i].ib_rio_addr, 
+			ACTION_STR(wkr[i].action),
+			MODE_STR(wkr[i].action_mode),
+			wkr[i].ib_valid, wkr[i].ib_handle, wkr[i].ib_rio_addr,
 			wkr[i].ib_byte_cnt);
 	}
 }
@@ -1760,8 +1811,8 @@ static void display_msg_status(struct cli_env *env)
 		display_cpu(env, wkr[i].wkr_thr.cpu_run);
 		LOGMSG(env,
 			"%7s %4s %2d %3d %3d %8d %7d %2d %2d\n",
-			ACTION_STR(wkr[i].action), 
-			MODE_STR(wkr[i].action_mode), 
+			ACTION_STR(wkr[i].action),
+			MODE_STR(wkr[i].action_mode),
 			wkr[i].mb_valid, wkr[i].acc_skt_valid,
 			wkr[i].con_skt_valid, wkr[i].msg_size,
 			wkr[i].sock_num, (NULL != wkr[i].sock_tx_buf),
@@ -1777,18 +1828,18 @@ static int StatusCmd(struct cli_env *env, int argc, char **argv)
 	if (argc) {
 		sel_stat = argv[0][0];
 	}
-	
+
 	switch (sel_stat) {
 		case 'i':
-		case 'I': 
+		case 'I':
 			display_ibwin_status(env);
 			break;
 		case 'm':
-		case 'M': 
+		case 'M':
 			display_msg_status(env);
 			break;
 		case 'g':
-		case 'G': 
+		case 'G':
 			display_gen_status(env);
 			break;
 		default:
@@ -2038,6 +2089,391 @@ MpdevsCmd,
 ATTR_NONE
 };
 
+static int program_rxs_mc_mask(struct cli_env *env,
+				did_val_t mc_did,
+				int did_cnt,
+				did_val_t *dids)
+{
+	const int mc_mask_idx = 0;
+	uint32_t mc_mask = 0;
+	uint32_t mc_mask_chk;
+	uint32_t port, rte;
+	int ret;
+	int did_i;
+	int rc = 1;
+
+	// Determine which port this endpoint is connected to
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0, RXS_SW_PORT, 4, &port);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read SW_PORT ERR %d %s\n",
+							ret, strerror(ret));
+		goto exit;
+	}
+
+	port &= RXS_SW_PORT_PORT_NUM;
+
+	// Read routing table values for requested destIDs, fail if they
+	// are not port numbers.
+	// >>** Assumes 8 bit destIDs!!! **<<
+
+	for (did_i = 0; did_i < did_cnt; did_i++) {
+		ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+			RXS_SPX_L2_GY_ENTRYZ_CSR(port, 0, dids[did_i]),
+			4, &rte);
+		if (ret) {
+			LOGMSG(env, "ERR: Could not read DID %d ERR %d %s\n",
+					dids[did_i], ret, strerror(ret));
+			goto exit;
+		}
+		LOGMSG(env, "Did: %d Port: 0x%x\n", dids[did_i], rte);
+
+		if (rte >= RXS2448_MAX_PORTS) {
+			LOGMSG(env,
+			"Routing table value 0x%x for id %d is unsupported\n",
+					rte, dids[did_i]);
+			goto exit;
+		}
+		if ((1 << rte) & mc_mask) {
+			LOGMSG(env, "ERR: Port %d or did %d duplicated\n",
+					rte, dids[did_i]);
+			goto exit;
+		}
+		mc_mask |= 1 << rte;
+	}
+
+	LOGMSG(env, "Multicast mask: 0x%06x\n", mc_mask);
+
+	// Program multicast mask 0.
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0,
+		RXS_SPX_MC_Y_S_CSR(port, mc_mask_idx), 4, mc_mask);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write MC mask set %d ERR %d %s\n",
+				mc_mask_idx, ret, strerror(ret));
+		goto exit;
+	}
+
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0,
+		RXS_SPX_MC_Y_C_CSR(port, mc_mask_idx), 4, ~mc_mask);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write MC mask clr %d ERR %d %s\n",
+				mc_mask_idx, ret, strerror(ret));
+		goto exit;
+	}
+
+	// Paranoid check that MC mask is correct
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+		RXS_SPX_MC_Y_S_CSR(port, mc_mask_idx), 4, &mc_mask_chk);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read MC mask %d ERR %d %s\n",
+				mc_mask_idx, ret, strerror(ret));
+		goto exit;
+	}
+
+	if (mc_mask != mc_mask_chk) {
+		LOGMSG(env, "ERR: MC mask 0x%x not 0x%x\n",
+				mc_mask_chk, mc_mask);
+		goto exit;
+	}
+
+	// Program mc_did routing table entry to select MC MASK 0
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0,
+		RXS_SPX_L2_GY_ENTRYZ_CSR(port, 0, mc_did),
+		4, RIO_RTV_MC_MSK(mc_mask_idx));
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write did entry %d ERR %d %s\n",
+				mc_did, ret, strerror(ret));
+		goto exit;
+	}
+
+	// Paranoid check that mc_did routing table entry is correct
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+		RXS_SPX_L2_GY_ENTRYZ_CSR(port, 0, mc_did), 4, &rte);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read did entry %d ERR %d %s\n",
+				mc_did, ret, strerror(ret));
+		goto exit;
+	}
+
+	if (RIO_RTV_MC_MSK(mc_mask_idx) != rte) {
+		LOGMSG(env, "ERR: did %d value %d not %d\n",
+				mc_did, rte, RIO_RTV_MC_MSK(mc_mask_idx));
+		goto exit;
+	}
+
+	rc = 0;
+exit:
+	return rc;
+}
+
+static int program_cps_mc_mask(struct cli_env *env,
+				did_val_t mc_did,
+				int did_cnt,
+				did_val_t *dids)
+{
+	const int mc_mask_idx = 0;
+	uint32_t mc_mask = 0;
+	uint32_t mc_mask_chk;
+	uint32_t rte, tmp;
+	int ret;
+	int did_i;
+	int rc = 1;
+
+	// Read routing table values for requested destIDs, fail if they
+	// are not port numbers.
+	// >>** Assumes 8 bit destIDs!!! **<<
+
+	for (did_i = 0; did_i < did_cnt; did_i++) {
+		ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+			CPS_BROADCAST_UC_DEVICE_RT_ENTRY(dids[did_i]), 4, &rte);
+		if (ret) {
+			LOGMSG(env, "ERR: Could not read DID %d ERR %d %s\n",
+					dids[did_i], ret, strerror(ret));
+			goto exit;
+		}
+		LOGMSG(env, "Did: %d Port: 0x%x\n", dids[did_i], rte);
+
+		if (rte >= CPS_MAX_PORTS) {
+			LOGMSG(env,
+			"Routing table value %d for id %d is unsupported\n",
+					rte, dids[did_i]);
+			goto exit;
+		}
+		if ((1 << rte) & mc_mask) {
+			LOGMSG(env, "ERR: Port %d or did %d duplicated\n",
+					rte, dids[did_i]);
+			goto exit;
+		}
+		mc_mask |= 1 << rte;
+	}
+
+	LOGMSG(env, "Multicast mask: 0x%05x\n", mc_mask);
+	// Program multicast mask 0.
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0,
+		CPS1848_BCAST_MCAST_MASK_X(mc_mask_idx), 4, mc_mask);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write MC mask %d ERR %d %s\n",
+				mc_mask_idx, ret, strerror(ret));
+		goto exit;
+	}
+
+	// Paranoid check that MC mask is correct
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+		CPS1848_BCAST_MCAST_MASK_X(mc_mask_idx), 4, &mc_mask_chk);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read MC mask %d ERR %d %s\n",
+				mc_mask_idx, ret, strerror(ret));
+		goto exit;
+	}
+
+	if (mc_mask != mc_mask_chk) {
+		LOGMSG(env, "ERR: MC mask 0x%x not 0x%x\n",
+				mc_mask_chk, mc_mask);
+		goto exit;
+	}
+
+	// Program mc_did routing table entry to select MC MASK 0
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0,
+		CPS_BROADCAST_UC_DEVICE_RT_ENTRY(mc_did), 4,
+		CPS_MC_PORT(mc_mask_idx));
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write did entry %d ERR %d %s\n",
+				mc_did, ret, strerror(ret));
+		goto exit;
+	}
+
+	// Paranoid check that mc_did routing table entry is correct
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0,
+		CPS_BROADCAST_UC_DEVICE_RT_ENTRY(mc_did), 4, &rte);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read did entry %d ERR %d %s\n",
+				mc_did, ret, strerror(ret));
+		goto exit;
+	}
+
+	if (CPS_MC_PORT(mc_mask_idx) != rte) {
+		LOGMSG(env, "ERR: did %d value %d not %d\n",
+				mc_did, rte, CPS_MC_PORT(mc_mask_idx));
+		goto exit;
+	}
+
+	// One more thing: alter switch parameters
+	// - Set arb mode to 0b111
+	//   round robin with input scheduler aging disabled.
+	// - Set crosspoint buffer allocate to '1' buffer per prio 1, 2, 3
+	// - Set OUTPUT_CREDIT_RSVN to 0
+	// - Set INPUT_STARV_LIM to 0
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0, CPS1848_SWITCH_PARAM_1, 4, &tmp);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read ARB_MODE ERR %d %s\n",
+						ret, strerror(ret));
+		goto exit;
+	}
+
+	tmp |= CPS1848_SWITCH_PARAM_1_ARB_MODE_RR_AGELESS;
+	tmp |= CPS1848_SWITCH_PARAM_1_BUF_ALLOC;
+	tmp &= ~(CPS1848_SWITCH_PARAM_1_INPUT_STARV_LIM);
+	tmp &= ~(CPS1848_SWITCH_PARAM_1_OUTPUT_CREDIT_RSVN);
+
+	ret = riomp_mgmt_rcfg_write(mp_h, 0, 0, CPS1848_SWITCH_PARAM_1, 4, tmp);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not write ARB_MODE ERR %d %s\n",
+						ret, strerror(ret));
+		goto exit;
+	}
+
+	rc = 0;
+exit:
+	return rc;
+}
+
+// Program multicast mask to include ports for specified device IDs.
+static int program_mc_mask(struct cli_env *env,
+				did_val_t mc_did,
+				int did_cnt,
+				did_val_t *dids)
+{
+	uint32_t id;
+	int ret;
+	int rc = 1;
+
+	// Check that this device is connected to a CPS1848 or CPS1432.
+
+	ret = riomp_mgmt_rcfg_read(mp_h, 0, 0, CPS1848_DEV_IDENT_CAR, 4, &id);
+	if (ret) {
+		LOGMSG(env, "ERR: Could not read RIO_DEV_IDENT %d %s\n",
+							ret, strerror(ret));
+		goto exit;
+	}
+
+	if ((id & RIO_DEV_IDENT_VEND) != RIO_VEND_IDT) {
+		LOGMSG(env, "ERR: Unsupported device vendor ID 0x%x\n",
+						id & RIO_DEV_IDENT_DEVI);
+		goto exit;
+	}
+
+	if (((id & RIO_DEV_IDENT_DEVI) == (RIO_DEVI_IDT_RXS2448 << 16)) ||
+		((id & RIO_DEV_IDENT_DEVI) == (RIO_DEVI_IDT_RXS1632 << 16))) {
+		rc = program_rxs_mc_mask(env, mc_did, did_cnt, dids);
+		goto exit;
+	}
+
+	if (((id & RIO_DEV_IDENT_DEVI) == (RIO_DEVI_IDT_CPS1848 << 16)) ||
+		((id & RIO_DEV_IDENT_DEVI) == (RIO_DEVI_IDT_CPS1432 << 16))) {
+		rc = program_cps_mc_mask(env, mc_did, did_cnt, dids);
+		goto exit;
+	}
+
+	LOGMSG(env, "ERR: Unsupported device 0x%x\n", id & RIO_DEV_IDENT_DEVI);
+exit:
+	return rc;
+}
+
+static int MulticastCmd(struct cli_env *env, int argc, char **argv)
+{
+	did_val_t *ep_list = NULL;
+	uint32_t number_of_eps = 0;
+	uint32_t ep;
+	int did_i;
+	int ret;
+	const int num_dids = 10;
+	did_val_t dids[num_dids];
+	int did_cnt = 0;
+	did_val_t mc_did;
+	bool found_one;
+
+	if (tok_parse_did(argv[0], &mc_did, 0)) {
+		LOGMSG(env, "ERR: %s is not a valid destination ID\n",
+				argv[0]);
+		goto exit;
+	}
+
+	while (did_cnt + 1 < argc) {
+		if (tok_parse_did(argv[did_cnt + 1], &dids[did_cnt], 0)) {
+			LOGMSG(env, "ERR: %s is not a valid destination ID\n",
+				argv[did_cnt + 1]);
+			goto exit;
+		}
+		did_cnt++;
+	}
+
+	// Get EPs for this MPORT
+
+	ret = riomp_mgmt_get_ep_list(mp_h_num, &ep_list, &number_of_eps);
+	if (ret) {
+		LOGMSG(env, "ERR: riodp_ep_get_list() ERR %d: %s\n",
+					ret, strerror(ret));
+		goto exit;
+	}
+
+	// Check that requested DestIDs exist in the system
+	// Allow the destID of this node to be part of the list
+
+	for (did_i = 0; did_i < did_cnt; did_i++) {
+		found_one = (qresp.did_val == dids[did_i]);
+		for (ep = 0; (ep < number_of_eps) && !found_one; ep++) {
+			found_one = (ep_list[ep] == dids[did_i]);
+		}
+		if (!found_one) {
+			LOGMSG(env, "ERR: Endpoint %d does not exist.\n",
+				dids[did_i]);
+			goto exit;
+		}
+	}
+
+	// Check that multicast DestID does not exist in the system
+	// If it does, fail, as multicasting to an existing endpoint would
+	// mess up routing to that endpoint until a reboot occurred.
+
+	found_one = false;
+	for (ep = 0; (ep < number_of_eps) && !found_one; ep++) {
+		found_one = (ep_list[ep] == mc_did);
+	}
+	if (found_one) {
+		LOGMSG(env,
+			"ERR: Endpoint %d cannot be used for as the MC did.\n",
+			mc_did);
+		goto exit;
+	}
+
+	if (qresp.did_val == mc_did) {
+		LOGMSG(env,
+			"ERR: This endpoint's DestID %d "
+			"cannot be used as the MC did.\n",
+			mc_did);
+		goto exit;
+	}
+
+	// Check that multicast DestID does not exist in the system
+
+	ret = riomp_mgmt_free_ep_list(&ep_list);
+	if (ret) {
+		LOGMSG(env, "ERR: riodp_ep_free_list() ERR %d: %s\n",
+				ret, strerror(ret));
+	}
+
+	// Program multicast mask, CPS1848 specific
+	// Assumes use of global routing table.
+
+	if (program_mc_mask(env, mc_did, did_cnt, dids)) {
+		LOGMSG(env, "ERR: program_mc_mask() failed\n");
+	}
+exit:
+	return 0;
+}
+
+struct cli_cmd Multicast = {
+"multicast",
+2,
+2,
+"Set multicast for list of destination IDs",
+"<mc_did> <did>...\n"
+	"<mc_did>: the otherwise unused device ID for multicast\n"
+	"<did>   : device IDs of the target(s) of the multicast\n"
+	"          Must enter at least one, maximum 10.\n",
+MulticastCmd,
+ATTR_NONE
+};
+
 static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 {
 	uint16_t idx, st_i = 0, end_i = MAX_TIMESTAMPS-1;
@@ -2052,7 +2488,7 @@ static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 
 	switch (argv[1][0]) {
 	case 'd':
-	case 'D': 
+	case 'D':
 		ts_p = &wkr[idx].desc_ts;
 		break;
 	case 'f':
@@ -2067,7 +2503,7 @@ static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 		LOGMSG(env, "\nFAILED: <type> not 'd', 'f' or 'm'\n");
 		goto exit;
 	}
-		
+
 	switch (argv[2][0]) {
 	case 's':
 	case 'S':
@@ -2137,7 +2573,7 @@ static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 			"\nIdx ---->> Sec<<---- Nsec---mmmuuunnn Marker\n");
 		for (idx = st_i; idx <= end_i; idx++) {
 			LOGMSG(env, "%4d %16ld %16ld %d\n", idx,
-				ts_p->ts_val[idx].tv_sec, 
+				ts_p->ts_val[idx].tv_sec,
 				ts_p->ts_val[idx].tv_nsec,
 				ts_p->ts_mkr[idx]);
 		}
@@ -2168,7 +2604,7 @@ static int UTimeCmd(struct cli_env *env, int argc, char **argv)
 				got_one = 1;
 			}
 			LOGMSG(env, "%4d %16ld %16ld %d -> %d\n", idx,
-				diff.tv_sec, diff.tv_nsec, 
+				diff.tv_sec, diff.tv_nsec,
 				ts_p->ts_mkr[idx], ts_p->ts_mkr[idx+1]);
 		}
 
@@ -2229,6 +2665,7 @@ struct cli_cmd *goodput_cmds[] = {
 	&dmaRxLat,
 	&dma,
 	&dmaNum,
+	&dmaRxGoodput,
 	&msgTx,
 	&msgRx,
 	&msgTxLat,
@@ -2247,6 +2684,7 @@ struct cli_cmd *goodput_cmds[] = {
 	&CPUOccSet,
 	&CPUOccDisplay,
 	&Mpdevs,
+	&Multicast,
 	&UTime,
 };
 

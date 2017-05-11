@@ -87,6 +87,7 @@ enum req_type {
 	dma_tx_num,
 	dma_tx_lat,
 	dma_rx_lat,
+	dma_rx_gp,
 	message_tx,
 	message_tx_lat,
 	message_tx_oh,

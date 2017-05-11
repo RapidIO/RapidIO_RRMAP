@@ -909,6 +909,58 @@ exit:
 	dealloc_dma_tx_buffer(info);
 }
 
+void dma_rx_goodput(struct worker *info)
+{
+	uint8_t * volatile rx_flag;
+	uint8_t curr_rx_flag_val;
+	uint8_t new_rx_flag_val;
+
+	if (!info->byte_cnt || !info->acc_size) {
+		ERR("FAILED: byte_cnt or access size is 0!\n");
+		return;
+	}
+
+	if (!info->ib_valid || (NULL == info->ib_ptr))  {
+		ERR("FAILED: Must do IBA before measuring RX Goodput.\n");
+		return;
+	}
+
+	rx_flag = (uint8_t * volatile)info->ib_ptr + info->byte_cnt - 1;
+
+	info->perf_iter_cnt = 0;
+	curr_rx_flag_val = info->perf_iter_cnt;
+	*rx_flag = curr_rx_flag_val;
+
+	zero_stats(info);
+
+	clock_gettime(CLOCK_MONOTONIC, &info->st_time);
+
+	// *rx_flag will be incremented by dma_goodput executing on another
+	// node.  This loop increments goodput measured for this node
+	// based on changes in *rx_flag.  This monitoring proves that
+	// data is being received.
+	//
+	// NOTE: There is no interlock with dma_goodput, so it is possible
+	// that dma_rx_goodput may miss some DMA transactions.
+
+	while (!info->stop_req) {
+		uint8_t incr;
+
+		//@sonar:off - c:EmptyCompoundStatement
+		while ((*rx_flag == curr_rx_flag_val) && !info->stop_req) {
+
+		}
+		//@sonar:on
+		new_rx_flag_val = *rx_flag;
+		incr = new_rx_flag_val - curr_rx_flag_val;
+		curr_rx_flag_val = new_rx_flag_val;
+
+		clock_gettime(CLOCK_MONOTONIC, &info->end_time);
+		info->perf_byte_cnt += (info->byte_cnt * incr);
+		info->perf_iter_cnt += incr;
+	}
+}
+
 int alloc_msg_tx_rx_buffs(struct worker *info)
 {
 	int rc;
@@ -1401,6 +1453,9 @@ void *worker_thread(void *parm)
 			break;
 		case dma_rx_lat:
 			dma_rx_latency(info);
+			break;
+		case dma_rx_gp:
+			dma_rx_goodput(info);
 			break;
 		case message_tx:
 		case message_tx_lat:

@@ -425,7 +425,7 @@ static uint32_t cps_program_mc_mask(DAR_DEV_INFO_t *dev_info,
 	}
 
 	if (RIO_ALL_PORTS == in_parms->set_on_port) {
-		base_addr = CPS1848_BCAST__MCAST_MASK_X(0);
+		base_addr = CPS1848_BCAST_MCAST_MASK_X(0);
 	} else {
 		base_addr = CPS1848_PORT_X_MCAST_MASK_Y(in_parms->set_on_port,
 				0);
